@@ -1,6 +1,10 @@
-// Referral queue with the concerns column. Clicking a row opens a right side
-// drawer with client details, clinical intake, documents, and management.
+// Referral queue with the concerns column and an urgency filter (the
+// dashboard's High urgency tile links here with ?urgency=high). Clicking a
+// row opens a right side drawer with client details, clinical intake,
+// documents, management controls, and a direct chat with the submitting
+// hospital partner.
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import Drawer from "../components/Drawer.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
@@ -20,11 +24,14 @@ function Field({ label, value }) {
 
 export default function CsQueue() {
   const toast = useToast();
+  const [params, setParams] = useSearchParams();
   const [referrals, setReferrals] = useState([]);
   const [staff, setStaff] = useState([]);
   const [openItem, setOpenItem] = useState(null);
   const [manage, setManage] = useState({ status: "", assigned_staff: "", concerns_flag: "", notes: "" });
   const [statusFilter, setStatusFilter] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const urgencyFilter = params.get("urgency") || "";
 
   function load() {
     api("/referrals/").then(setReferrals).catch((e) => toast(e.message, "error"));
@@ -56,7 +63,30 @@ export default function CsQueue() {
     }
   }
 
-  const visible = statusFilter ? referrals.filter((r) => r.status === statusFilter) : referrals;
+  // Starts (or reuses) a direct conversation with the hospital partner who
+  // submitted this referral, then tells the messages bubble to open it.
+  async function chatWithHospital() {
+    if (!openItem?.submitted_by) return;
+    setChatBusy(true);
+    try {
+      const data = await api("/messaging/conversations/", { method: "POST", body: { user_id: openItem.submitted_by } });
+      window.dispatchEvent(new CustomEvent("carelink:open-thread", { detail: { conversationId: data.id } }));
+      setOpenItem(null);
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
+  function clearUrgencyFilter() {
+    const next = new URLSearchParams(params);
+    next.delete("urgency");
+    setParams(next, { replace: true });
+  }
+
+  let visible = statusFilter ? referrals.filter((r) => r.status === statusFilter) : referrals;
+  if (urgencyFilter) visible = visible.filter((r) => r.urgency === urgencyFilter || (urgencyFilter === "high" && r.urgency === "emergency"));
   const details = openItem?.client_details || {};
   const intake = openItem?.intake_data || {};
 
@@ -64,6 +94,12 @@ export default function CsQueue() {
     <div>
       <h1>Referral queue</h1>
       <p className="sub">Every referral submitted by hospital partners, including future Outlook intake.</p>
+      {urgencyFilter && (
+        <div className="row" style={{ marginBottom: 10 }}>
+          <span className="badge warning">Urgency: {urgencyFilter} and above</span>
+          <button className="btn ghost small" onClick={clearUrgencyFilter}>Clear</button>
+        </div>
+      )}
       <div className="row" style={{ marginBottom: 12 }}>
         <button className={`btn small ${statusFilter ? "outline" : ""}`} onClick={() => setStatusFilter("")}>All</button>
         {STATUSES.map((s) => (
@@ -85,6 +121,7 @@ export default function CsQueue() {
                 <td className="muted small">{new Date(r.created_at).toLocaleDateString()}</td>
               </tr>
             ))}
+            {visible.length === 0 && <tr><td colSpan={7} className="muted center">No referrals match this filter.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -141,6 +178,9 @@ export default function CsQueue() {
           <label>Internal notes</label>
           <textarea rows={3} value={manage.notes} onChange={(e) => setManage({ ...manage, notes: e.target.value })} />
           <button className="btn" style={{ marginTop: 14, width: "100%" }} onClick={save}>Save changes</button>
+          <button className="btn outline" style={{ marginTop: 8, width: "100%" }} onClick={chatWithHospital} disabled={chatBusy}>
+            {chatBusy ? "Opening chat..." : `Chat with ${openItem.submitted_by_name || "hospital"}`}
+          </button>
         </Drawer>
       )}
     </div>

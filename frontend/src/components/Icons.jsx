@@ -16,6 +16,7 @@ const PATHS = {
   megaphone: "M3 11l14-6v14L3 13v-2zM7 13.5V19a2 2 0 0 0 4 0v-3.5M17 8a4 4 0 0 1 0 8",
   heart: "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z",
   plus: "M12 5v14M5 12h14",
+  chart: "M3 3v18h18M8 17V10M13 17V6M18 17v-4",
 };
 
 export default function Icon({ name, size = 18 }) {

@@ -1,6 +1,6 @@
 // Sign in page with the show and hide password eye toggle.
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { homePathFor, useAuth } from "../auth.jsx";
 import { useToast } from "../toast.jsx";
 
@@ -60,7 +60,10 @@ export default function Login() {
               {busy ? "Signing in..." : "Sign in"}
             </button>
           </form>
-          <p className="muted small center" style={{ marginTop: 16 }}>
+          <p className="center small" style={{ marginTop: 16 }}>
+            <Link to="/forgot-password">Forgot password?</Link>
+          </p>
+          <p className="muted small center" style={{ marginTop: 6 }}>
             Received an invite link? Open it to set your password.
           </p>
         </div>

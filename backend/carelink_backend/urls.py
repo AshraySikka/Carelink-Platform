@@ -11,6 +11,7 @@ urlpatterns = [
     path("api/messaging/", include("messaging.urls")),
     path("api/notifications/", include("notifications.urls")),
     path("api/integrations/", include("integrations.urls")),
+    path("api/reports/", include("reports.urls")),
 ]
 
 # Serve uploaded referral and clinical documents in development.

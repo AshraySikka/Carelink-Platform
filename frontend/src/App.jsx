@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import { homePathFor, useAuth } from "./auth.jsx";
 import Login from "./pages/Login.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
 import SetPassword from "./pages/SetPassword.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminPrograms from "./pages/AdminPrograms.jsx";
@@ -22,6 +23,7 @@ import AiSearch from "./pages/AiSearch.jsx";
 import FamilyView from "./pages/FamilyView.jsx";
 import ManagerApprovals from "./pages/ManagerApprovals.jsx";
 import Messages from "./pages/Messages.jsx";
+import Reports from "./pages/Reports.jsx";
 import Settings from "./pages/Settings.jsx";
 
 function Protected({ roles, children }) {
@@ -37,6 +39,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/set-password" element={<SetPassword />} />
 
       <Route path="/admin" element={<Protected roles={["admin"]}><AdminUsers /></Protected>} />
@@ -60,6 +63,7 @@ export default function App() {
       <Route path="/family" element={<Protected roles={["family"]}><FamilyView /></Protected>} />
 
       <Route path="/approvals" element={<Protected roles={["manager", "admin"]}><ManagerApprovals /></Protected>} />
+      <Route path="/reports" element={<Protected roles={["admin", "manager"]}><Reports /></Protected>} />
 
       <Route path="/resources" element={<Protected><Resources /></Protected>} />
       <Route path="/ai-search" element={<Protected><AiSearch /></Protected>} />

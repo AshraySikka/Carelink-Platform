@@ -14,8 +14,8 @@ from accounts.permissions import IsAdmin, IsAdminOrCS, IsSchedulingStaff
 from notifications.utils import notify, notify_role
 from .models import (
     ChangeRequestStatus, ClinicalDocument, EmergencyRequest, FamilyMember,
-    NewsPost, Program, Referral, ReferralDocument, ReferralStatus, Resource,
-    Shift, ShiftChangeRequest, ShiftStatus,
+    NewsPost, PlatformSetting, Program, Referral, ReferralDocument,
+    ReferralStatus, Resource, Shift, ShiftChangeRequest, ShiftStatus,
 )
 from .serializers import (
     ClinicalDocumentSerializer, EmergencySerializer, FamilyMemberSerializer,
@@ -436,6 +436,27 @@ def resources_view(request):
 
 
 
+def _roles_at_cap(candidate_audience, exclude_id=None):
+    """Return the list of roles that are already at the news post cap and
+    would be pushed over it by publishing candidate_audience. An empty
+    audience (everyone) is checked against every role."""
+    setting = PlatformSetting.load()
+    cap = setting.news_post_cap
+    target_roles = list(Roles.values) if not candidate_audience else candidate_audience
+
+    published = NewsPost.objects.filter(published=True)
+    if exclude_id is not None:
+        published = published.exclude(id=exclude_id)
+    published = list(published)
+
+    over = []
+    for role in target_roles:
+        count = sum(1 for p in published if not p.audience or role in p.audience)
+        if count >= cap:
+            over.append(role)
+    return over
+
+
 @api_view(["GET", "POST"])
 def news_view(request):
     user = request.user
@@ -444,6 +465,15 @@ def news_view(request):
             return Response({"detail": "Only admins publish news."}, status=403)
         serializer = NewsPostSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        audience = serializer.validated_data.get("audience") or []
+        if serializer.validated_data.get("published", True):
+            over = _roles_at_cap(audience)
+            if over:
+                cap = PlatformSetting.load().news_post_cap
+                return Response(
+                    {"detail": f"These roles are already at the {cap} post limit, unpublish an older post first: {', '.join(over)}."},
+                    status=400,
+                )
         serializer.save(author=user)
         return Response(serializer.data, status=201)
     posts = NewsPost.objects.filter(published=True).order_by("-created_at")
@@ -463,8 +493,33 @@ def news_detail_view(request, post_id):
         return Response(status=204)
     serializer = NewsPostSerializer(post, data=request.data, partial=True)
     serializer.is_valid(raise_exception=True)
+    will_publish = serializer.validated_data.get("published", post.published)
+    audience = serializer.validated_data.get("audience", post.audience)
+    if will_publish and (not post.published or audience != post.audience):
+        over = _roles_at_cap(audience, exclude_id=post.id)
+        if over:
+            cap = PlatformSetting.load().news_post_cap
+            return Response(
+                {"detail": f"These roles are already at the {cap} post limit, unpublish an older post first: {', '.join(over)}."},
+                status=400,
+            )
     serializer.save()
     return Response(serializer.data)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAdmin])
+def news_settings_view(request):
+    """Admin: read or update the news post cap, clamped between 1 and 5."""
+    setting = PlatformSetting.load()
+    if request.method == "PATCH":
+        try:
+            cap = int(request.data.get("news_post_cap"))
+        except (TypeError, ValueError):
+            return Response({"detail": "news_post_cap must be a number."}, status=400)
+        setting.news_post_cap = max(1, min(5, cap))
+        setting.save()
+    return Response({"news_post_cap": setting.news_post_cap})
 
 
 # ---------------- Clinical documentation ----------------
@@ -493,3 +548,59 @@ def clinical_docs_view(request):
     else:
         qs = ClinicalDocument.objects.none()
     return Response(ClinicalDocumentSerializer(qs.order_by("-created_at"), many=True).data)
+
+
+
+@api_view(["POST"])
+@permission_classes([IsAdmin])
+def programs_bulk_view(request):
+    """
+    Admin: upload a spreadsheet to create programs in bulk.
+
+    Expected columns, header row required: name, description (description
+    is optional). Existing programs are matched by name and have their
+    description updated rather than duplicated.
+    """
+    file = request.FILES.get("file")
+    if not file:
+        return Response({"detail": "Upload an .xlsx file with a file field named file."}, status=400)
+
+    try:
+        from openpyxl import load_workbook
+    except ImportError:
+        return Response({"detail": "openpyxl is not installed on the server."}, status=500)
+
+    try:
+        workbook = load_workbook(file, read_only=True, data_only=True)
+        sheet = workbook.active
+        rows = list(sheet.iter_rows(values_only=True))
+    except Exception:
+        return Response({"detail": "Could not read that file. Make sure it is a valid .xlsx spreadsheet."}, status=400)
+
+    if not rows:
+        return Response({"detail": "The spreadsheet is empty."}, status=400)
+
+    header = [str(c).strip().lower() if c else "" for c in rows[0]]
+    if "name" not in header:
+        return Response({"detail": "Header row must include: name (description is optional)."}, status=400)
+    col = {name: header.index(name) for name in header if name}
+
+    created, updated, errors = [], [], []
+    for row_number, row in enumerate(rows[1:], start=2):
+        if not row or not any(row):
+            continue
+        name = str(row[col["name"]] or "").strip() if col.get("name") is not None else ""
+        description = str(row[col["description"]] or "").strip() if "description" in col and col["description"] is not None and len(row) > col["description"] else ""
+        if not name:
+            errors.append({"row": row_number, "reason": "Missing program name."})
+            continue
+        program, was_created = Program.objects.get_or_create(name=name, defaults={"description": description})
+        if was_created:
+            created.append({"row": row_number, "name": name})
+        else:
+            if description:
+                program.description = description
+                program.save(update_fields=["description"])
+            updated.append({"row": row_number, "name": name})
+
+    return Response({"created": created, "updated": updated, "errors": errors})

@@ -104,3 +104,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.full_name or self.email} ({self.role})"
+
+
+class PasswordResetOTP(models.Model):
+    """A one time 6 digit code emailed to a user resetting their password.
+    Expires 10 minutes after creation and can only be used once."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reset_codes")
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)

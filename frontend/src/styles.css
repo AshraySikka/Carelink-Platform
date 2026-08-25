@@ -201,3 +201,33 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
 .staff-head:hover { background: var(--primary-soft); }
 .chev { display: inline-block; width: 22px; color: var(--muted); }
 .staff-details { background: var(--primary-soft); border-radius: 10px; padding: 14px 16px; margin-top: 4px; }
+
+
+/* Field staff tab bar (List / Calendar / Availability / Documentation) */
+.tabbar { display: flex; gap: 4px; background: #eef2f4; padding: 4px; border-radius: 10px; }
+.tab { border: none; background: transparent; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; color: var(--muted); cursor: pointer; }
+.tab.active { background: var(--primary-soft); color: var(--primary); }
+
+/* News feed cards used on the field staff List tab */
+.news-feed { background: var(--primary-soft); border: none; }
+.news-item { background: #fff; border-radius: 10px; padding: 12px 14px; }
+
+/* Month calendar grid */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.cal-headcell { background: var(--bg); padding: 10px; text-align: center; font-weight: 600; }
+.cal-cell { background: #fff; min-height: 90px; padding: 8px; }
+.cal-cell.cal-today .cal-daynum { background: var(--primary); color: #fff; border-radius: 999px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; }
+.cal-daynum { font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+.cal-shift { border-radius: 6px; padding: 4px 6px; font-size: 0.75rem; margin-bottom: 3px; line-height: 1.3; }
+.cal-scheduled { background: var(--primary-soft); color: var(--primary); }
+.cal-confirmed { background: #dbeafe; color: #1d4ed8; }
+.cal-progress { background: var(--warning-soft); color: var(--warning); }
+.cal-completed { background: var(--success-soft); color: var(--success); }
+.cal-changereq { background: var(--danger-soft); color: var(--danger); }
+.cal-legend { margin-top: 14px; gap: 18px; font-size: 0.82rem; color: var(--muted); flex-wrap: wrap; }
+.cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+
+/* Availability day toggle pills */
+.day-toggle { width: 52px; height: 52px; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--muted); font-weight: 700; cursor: pointer; }
+.day-toggle.on { background: var(--primary); border-color: var(--primary); color: #fff; }

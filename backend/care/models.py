@@ -164,6 +164,23 @@ class NewsPost(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class PlatformSetting(models.Model):
+    """
+    A single row of platform wide configuration, admin editable.
+
+    news_post_cap limits how many published news posts can target the same
+    role at once (a post with an empty audience counts toward every role).
+    Kept as a model instead of a settings.py constant so admins can change
+    it from the News posts screen without a redeploy.
+    """
+    news_post_cap = models.PositiveSmallIntegerField(default=3)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class ClinicalDocument(models.Model):
     """A visit note or file uploaded by field staff after a shift."""
     shift = models.ForeignKey(Shift, null=True, blank=True, on_delete=models.CASCADE, related_name="clinical_documents")

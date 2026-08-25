@@ -6,7 +6,8 @@ Allowed pairs:
   customer service  <-> field staff
   customer service  <-> admin
   customer service  <-> manager
-  hospital partner  <-> customer service
+  admin             <-> hospital partner (the "chat with hospital" button)
+  customer service  <-> hospital partner
   manager           <-> their own direct reports (field staff)
 """
 from accounts.models import Roles, User
@@ -30,6 +31,10 @@ def can_message(a: User, b: User) -> bool:
     if pair == {Roles.CUSTOMER_SERVICE, Roles.MANAGER}:
         return True
     if pair == {Roles.HOSPITAL_PARTNER, Roles.CUSTOMER_SERVICE}:
+        return True
+    if pair == {Roles.HOSPITAL_PARTNER, Roles.ADMIN}:
+        # Lets admins use "Chat with hospital" from the referral drawer,
+        # same as customer service already could.
         return True
 
     if pair == {Roles.MANAGER, Roles.FIELD_STAFF}:
@@ -55,9 +60,9 @@ def eligible_contacts(user: User):
     if role == Roles.CUSTOMER_SERVICE:
         return User.objects.filter(role__in=[Roles.FIELD_STAFF, Roles.ADMIN, Roles.MANAGER, Roles.HOSPITAL_PARTNER])
     if role == Roles.ADMIN:
-        return User.objects.filter(role=Roles.CUSTOMER_SERVICE)
+        return User.objects.filter(role__in=[Roles.CUSTOMER_SERVICE, Roles.HOSPITAL_PARTNER])
     if role == Roles.HOSPITAL_PARTNER:
-        return User.objects.filter(role=Roles.CUSTOMER_SERVICE)
+        return User.objects.filter(role__in=[Roles.CUSTOMER_SERVICE, Roles.ADMIN])
     if role == Roles.MANAGER:
         return (User.objects.filter(manager=user) | User.objects.filter(role=Roles.CUSTOMER_SERVICE)).distinct()
     return User.objects.none()

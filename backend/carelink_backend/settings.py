@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "messaging",
     "notifications",
     "integrations",
+    "reports",
 ]
 
 MIDDLEWARE = [
@@ -124,3 +125,9 @@ MS_GRAPH_TENANT_ID = os.getenv("MS_GRAPH_TENANT_ID", "")
 MS_GRAPH_CLIENT_ID = os.getenv("MS_GRAPH_CLIENT_ID", "")
 MS_GRAPH_CLIENT_SECRET = os.getenv("MS_GRAPH_CLIENT_SECRET", "")
 OUTLOOK_INTAKE_MAILBOX = os.getenv("OUTLOOK_INTAKE_MAILBOX", "")
+
+# SendGrid, used for invite emails, bulk invite emails, and password reset
+# codes. Without a key, emails are printed to the console instead of sent,
+# so the demo still works without a SendGrid account.
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
+SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "no-reply@carelink.demo")

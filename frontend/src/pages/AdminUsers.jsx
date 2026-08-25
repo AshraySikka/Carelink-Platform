@@ -1,5 +1,5 @@
 // Admin: invite users, edit roles, assign managers and programs, copy
-// invite links, and deactivate accounts.
+// invite links, bulk invite from Excel, and deactivate accounts.
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import Modal from "../components/Modal.jsx";
@@ -17,6 +17,9 @@ export default function AdminUsers() {
   const [editing, setEditing] = useState(null);
   const [invite, setInvite] = useState({ email: "", full_name: "", role: "client", hospital: "", manager: "" });
   const [inviteLink, setInviteLink] = useState("");
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
 
   function load() {
     api("/auth/users/").then(setUsers).catch((e) => toast(e.message, "error"));
@@ -73,6 +76,24 @@ export default function AdminUsers() {
     }
   }
 
+  async function bulkInvite(file) {
+    if (!file) return;
+    setBulkBusy(true);
+    setBulkResult(null);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const result = await api("/auth/users/bulk-invite/", { method: "POST", formData });
+      setBulkResult(result);
+      toast(`Invited ${result.created.length} user(s).`, "success");
+      load();
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   return (
     <div>
       <div className="row between">
@@ -80,7 +101,10 @@ export default function AdminUsers() {
           <h1>Users and invites</h1>
           <p className="sub">Everyone on the platform, across every role.</p>
         </div>
-        <button className="btn" onClick={() => { setInviteOpen(true); setInviteLink(""); }}>Invite user</button>
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          <button className="btn outline" onClick={() => { setBulkOpen(true); setBulkResult(null); }}>Bulk invite (Excel)</button>
+          <button className="btn" onClick={() => { setInviteOpen(true); setInviteLink(""); }}>Invite user</button>
+        </div>
       </div>
 
       <div className="card tight">
@@ -172,6 +196,31 @@ export default function AdminUsers() {
             </select>
             <button className="btn" style={{ marginTop: 14 }}>Save changes</button>
           </form>
+        </Modal>
+      )}
+
+      {bulkOpen && (
+        <Modal title="Bulk invite from Excel" onClose={() => setBulkOpen(false)}>
+          <p className="muted small">
+            Upload an .xlsx file with a header row: <strong>full_name, email, role, programs, manager_email</strong>.
+            programs and manager_email are optional. programs is a comma separated list of existing program names,
+            manager_email must match an existing manager's account.
+          </p>
+          <input type="file" accept=".xlsx" disabled={bulkBusy} onChange={(e) => bulkInvite(e.target.files[0])} />
+          {bulkBusy && <p className="muted small">Processing...</p>}
+          {bulkResult && (
+            <div className="stack small" style={{ marginTop: 14 }}>
+              <div className="badge success">{bulkResult.created.length} invited</div>
+              {bulkResult.skipped.length > 0 && <div className="badge warning">{bulkResult.skipped.length} skipped (already existed)</div>}
+              {bulkResult.errors.length > 0 && <div className="badge danger">{bulkResult.errors.length} errors</div>}
+              {bulkResult.errors.map((e, i) => (
+                <div key={i} className="muted">Row {e.row}{e.email ? ` (${e.email})` : ""}: {e.reason}</div>
+              ))}
+              {bulkResult.skipped.map((s, i) => (
+                <div key={i} className="muted">Row {s.row} ({s.email}): {s.reason}</div>
+              ))}
+            </div>
+          )}
         </Modal>
       )}
     </div>

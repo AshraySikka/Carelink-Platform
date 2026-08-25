@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("programs/", views.programs_view),
+    path("programs/bulk/", views.programs_bulk_view),
     path("programs/<int:program_id>/", views.program_detail_view),
     path("referrals/", views.referrals_view),
     path("referrals/<int:referral_id>/", views.referral_detail_view),
@@ -22,5 +23,6 @@ urlpatterns = [
     path("resources/", views.resources_view),
     path("news/", views.news_view),
     path("news/<int:post_id>/", views.news_detail_view),
+    path("news-settings/", views.news_settings_view),
     path("clinical-docs/", views.clinical_docs_view),
 ]
