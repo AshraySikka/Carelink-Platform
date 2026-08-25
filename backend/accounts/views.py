@@ -205,6 +205,21 @@ def staff_directory_view(request):
     return Response(UserSerializer(qs.distinct(), many=True).data)
 
 
+@api_view(["GET"])
+def clients_directory_view(request):
+    """
+    Client directory used by the New shift form so picking a client can
+    auto fill their address. Scheduling staff only.
+    """
+    if request.user.role not in (Roles.ADMIN, Roles.CUSTOMER_SERVICE, Roles.MANAGER):
+        return Response({"detail": "Not allowed."}, status=403)
+    qs = User.objects.filter(role=Roles.CLIENT).order_by("full_name")
+    return Response([
+        {"id": u.id, "full_name": u.full_name, "address": u.address}
+        for u in qs
+    ])
+
+
 @api_view(["POST"])
 @permission_classes([IsAdmin])
 def bulk_invite_view(request):
@@ -339,3 +354,17 @@ def verify_password_reset_view(request):
         user.invite_status = InviteStatus.ACTIVE
     user.save()
     return Response({**tokens_for(user), "user": UserSerializer(user).data})
+
+@api_view(["GET"])
+def clients_directory_view(request):
+    """
+    Client directory used by the New shift form so picking a client can
+    auto fill their address. Scheduling staff only.
+    """
+    if request.user.role not in (Roles.ADMIN, Roles.CUSTOMER_SERVICE, Roles.MANAGER):
+        return Response({"detail": "Not allowed."}, status=403)
+    qs = User.objects.filter(role=Roles.CLIENT).order_by("full_name")
+    return Response([
+        {"id": u.id, "full_name": u.full_name, "address": u.address}
+        for u in qs
+    ])

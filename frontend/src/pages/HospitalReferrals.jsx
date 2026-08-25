@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import NewsFeed from "../components/NewsFeed.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
 export default function HospitalReferrals() {
@@ -20,6 +21,9 @@ export default function HospitalReferrals() {
         </div>
         <Link to="/hospital/new" className="btn" style={{ textDecoration: "none" }}>New referral</Link>
       </div>
+
+      <NewsFeed />
+
       <div className="card tight">
         <table>
           <thead><tr><th>Client</th><th>Urgency</th><th>Status</th><th>Assigned</th><th>Submitted</th></tr></thead>

@@ -5,6 +5,7 @@ import { api } from "../api";
 import Modal from "../components/Modal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../auth.jsx";
+import NewsFeed from "../components/NewsFeed.jsx";
 import { useToast } from "../toast.jsx";
 
 function getPosition() {
@@ -24,7 +25,6 @@ export default function FieldSchedule() {
   const toast = useToast();
   const [tab, setTab] = useState("list");
   const [shifts, setShifts] = useState([]);
-  const [news, setNews] = useState([]);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
   // Lets "Log documentation" on a past visit jump straight to the
   // Documentation tab with that shift already selected.
@@ -33,10 +33,7 @@ export default function FieldSchedule() {
   function loadShifts() {
     api("/shifts/").then(setShifts).catch(() => {});
   }
-  useEffect(() => {
-    loadShifts();
-    api("/news/").then(setNews).catch(() => {});
-  }, []);
+  useEffect(loadShifts, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goDocument(shiftId) {
     setDocPresetShiftId(shiftId);
@@ -57,7 +54,7 @@ export default function FieldSchedule() {
       <h1>Your schedule</h1>
       <p className="sub">Confirm shifts, clock in/out, and log visit details.</p>
 
-      {tab === "list" && <ListTab shifts={shifts} news={news} reload={loadShifts} onDocument={goDocument} />}
+      {tab === "list" && <ListTab shifts={shifts} reload={loadShifts} onDocument={goDocument} />}
       {tab === "calendar" && <CalendarTab shifts={shifts} />}
       {tab === "availability" && <AvailabilityTab />}
       {tab === "documentation" && <DocumentationTab shifts={shifts} presetShiftId={docPresetShiftId} clearPreset={() => setDocPresetShiftId(null)} />}
@@ -69,7 +66,7 @@ export default function FieldSchedule() {
 
 // ---------------- List tab ----------------
 
-function ListTab({ shifts, news, reload, onDocument }) {
+function ListTab({ shifts, reload, onDocument }) {
   const toast = useToast();
   const [changeFor, setChangeFor] = useState(null);
   const [changeForm, setChangeForm] = useState({ reason: "", requested_start_time: "", requested_end_time: "" });
@@ -93,6 +90,22 @@ function ListTab({ shifts, news, reload, onDocument }) {
     try {
       await api(`/shifts/${shift.id}/${action}/`, { method: "POST", body: {} });
       toast(message, "success");
+      reload();
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  }
+
+  // On my way is only allowed on the calendar day of the shift, and also
+  // posts a real chat message to the client, so this opens that thread in
+  // the messages bubble right after sending.
+  async function sendOnMyWay(shift) {
+    try {
+      const data = await api(`/shifts/${shift.id}/on-my-way/`, { method: "POST", body: {} });
+      toast("The client has been told you are on the way.", "success");
+      if (data.conversation_id) {
+        window.dispatchEvent(new CustomEvent("carelink:open-thread", { detail: { conversationId: data.conversation_id, otherUser: { full_name: shift.client_name } } }));
+      }
       reload();
     } catch (error) {
       toast(error.message, "error");
@@ -126,24 +139,7 @@ function ListTab({ shifts, news, reload, onDocument }) {
 
   return (
     <div>
-      {news.length > 0 && (
-        <div className="card news-feed">
-          <div className="row" style={{ gap: 8, marginBottom: 4 }}>
-            <span>{"\u{1F4E2}"}</span><strong>News & updates</strong>
-          </div>
-          <div className="stack" style={{ gap: 10, marginTop: 10 }}>
-            {news.map((n) => (
-              <div key={n.id} className="news-item">
-                <div className="row between">
-                  <strong>{n.title}</strong>
-                  <span className="muted small">{new Date(n.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
-                </div>
-                <div className="small muted" style={{ whiteSpace: "pre-wrap" }}>{n.body}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <NewsFeed />
 
       <div className="section-label" style={{ marginTop: 20 }}>Upcoming</div>
       <div className="card tight" style={{ padding: upcoming.length ? 0 : 20 }}>
@@ -158,7 +154,11 @@ function ListTab({ shifts, news, reload, onDocument }) {
                 {s.status === "change_requested" && <div className="muted small">Awaiting manager decision: {s.change_request_note}</div>}
               </div>
               <div className="row">
-                {!s.clock_in_at && !s.on_my_way_at && <button className="btn outline small" onClick={() => simple(s, "on-my-way", "The client has been told you are on the way.")}>On my way</button>}
+                {!s.clock_in_at && !s.on_my_way_at && (
+                  new Date(s.start_time).toDateString() === new Date().toDateString()
+                    ? <button className="btn outline small" onClick={() => sendOnMyWay(s)}>On my way</button>
+                    : <button className="btn outline small" disabled title="Available on the day of the shift">On my way</button>
+                )}
                 {!s.clock_in_at && <button className="btn small" onClick={() => clockIn(s)}>Clock in</button>}
                 {s.clock_in_at && !s.clock_out_at && <button className="btn small" onClick={() => simple(s, "clock-out", "Clocked out. Nice work.")}>Clock out</button>}
                 {!s.clock_in_at && s.status !== "change_requested" && <button className="btn outline small" onClick={() => setChangeFor(s)}>Request change</button>}

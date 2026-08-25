@@ -1,6 +1,7 @@
 // Family: read only view of their loved one's visits and emergencies.
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import NewsFeed from "../components/NewsFeed.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
 export default function FamilyView() {
@@ -20,6 +21,8 @@ export default function FamilyView() {
     <div>
       <h1>Care overview</h1>
       <p className="sub">A read only view of your loved one's care schedule.</p>
+
+      <NewsFeed />
 
       {emergencies.filter((e) => e.status !== "resolved").map((e) => (
         <div key={e.id} className="card" style={{ borderColor: "var(--danger)" }}>

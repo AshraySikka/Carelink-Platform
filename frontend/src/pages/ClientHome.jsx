@@ -1,22 +1,21 @@
-// Client home: upcoming visits, emergency button, and visit change requests.
+// Client home: news up top, upcoming visits, and the emergency button.
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import Modal from "../components/Modal.jsx";
+import NewsFeed from "../components/NewsFeed.jsx";
+import RequestChangeModal from "../components/RequestChangeModal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useToast } from "../toast.jsx";
 
 export default function ClientHome() {
   const toast = useToast();
   const [shifts, setShifts] = useState([]);
-  const [news, setNews] = useState([]);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [changeFor, setChangeFor] = useState(null);
-  const [reason, setReason] = useState("");
 
   function load() {
     api("/shifts/").then(setShifts).catch(() => {});
-    api("/news/").then(setNews).catch(() => {});
   }
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -27,19 +26,6 @@ export default function ClientHome() {
       toast("Emergency request sent. The care team has been alerted. If this is life threatening, call 911.", "success");
       setEmergencyOpen(false);
       setDescription("");
-    } catch (error) {
-      toast(error.message, "error");
-    }
-  }
-
-  async function requestChange(e) {
-    e.preventDefault();
-    try {
-      await api("/change-requests/", { method: "POST", body: { shift: changeFor.id, reason } });
-      toast("Change request sent to the care team.", "success");
-      setChangeFor(null);
-      setReason("");
-      load();
     } catch (error) {
       toast(error.message, "error");
     }
@@ -58,7 +44,9 @@ export default function ClientHome() {
         <button className="btn danger" onClick={() => setEmergencyOpen(true)}>Emergency request</button>
       </div>
 
-      <h2>Upcoming visits</h2>
+      <NewsFeed />
+
+      <h2 style={{ marginTop: 20 }}>Upcoming visits</h2>
       <div className="stack" style={{ marginBottom: 24 }}>
         {upcoming.map((s) => (
           <div key={s.id} className="card" style={{ marginBottom: 0 }}>
@@ -77,14 +65,6 @@ export default function ClientHome() {
         {upcoming.length === 0 && <div className="card muted">No upcoming visits scheduled.</div>}
       </div>
 
-      {news.map((n) => (
-        <div key={n.id} className="card">
-          <span className="badge info">Announcement</span>
-          <h2 style={{ marginTop: 8 }}>{n.title}</h2>
-          <p className="small" style={{ whiteSpace: "pre-wrap" }}>{n.body}</p>
-        </div>
-      ))}
-
       {emergencyOpen && (
         <Modal title="Emergency request" onClose={() => setEmergencyOpen(false)}>
           <p className="small" style={{ background: "var(--danger-soft)", padding: 10, borderRadius: 8 }}>
@@ -98,15 +78,7 @@ export default function ClientHome() {
         </Modal>
       )}
 
-      {changeFor && (
-        <Modal title="Request a visit change" onClose={() => setChangeFor(null)}>
-          <form onSubmit={requestChange}>
-            <label>What would you like to change?</label>
-            <textarea rows={3} required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="I would like to move this visit to the afternoon..." />
-            <button className="btn" style={{ marginTop: 14 }}>Send request</button>
-          </form>
-        </Modal>
-      )}
+      {changeFor && <RequestChangeModal shift={changeFor} onClose={() => setChangeFor(null)} onSent={load} />}
     </div>
   );
 }

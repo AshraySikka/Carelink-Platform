@@ -100,10 +100,10 @@ export default function CsQueue() {
           <button className="btn ghost small" onClick={clearUrgencyFilter}>Clear</button>
         </div>
       )}
-      <div className="row" style={{ marginBottom: 12 }}>
-        <button className={`btn small ${statusFilter ? "outline" : ""}`} onClick={() => setStatusFilter("")}>All</button>
+      <div className="row" style={{ marginBottom: 16, gap: 8 }}>
+        <button className={`pill ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")}>All</button>
         {STATUSES.map((s) => (
-          <button key={s} className={`btn small ${statusFilter === s ? "" : "outline"}`} onClick={() => setStatusFilter(s)}>{s.replaceAll("_", " ")}</button>
+          <button key={s} className={`pill ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s.replaceAll("_", " ")}</button>
         ))}
       </div>
       <div className="card tight">
@@ -112,7 +112,12 @@ export default function CsQueue() {
           <tbody>
             {visible.map((r) => (
               <tr key={r.id} className="clickable" onClick={() => openReferral(r)}>
-                <td><strong>{r.client_name}</strong></td>
+                <td>
+                  <div className="name-cell">
+                    <span className="avatar">{r.client_name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()}</span>
+                    <strong>{r.client_name}</strong>
+                  </div>
+                </td>
                 <td className="muted">{r.hospital_name}</td>
                 <td><StatusBadge value={r.urgency} /></td>
                 <td><StatusBadge value={r.status} /></td>

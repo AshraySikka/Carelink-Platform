@@ -23,6 +23,10 @@ from .serializers import (
     ShiftChangeRequestSerializer, ShiftSerializer,
 )
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
+from messaging.models import Conversation, ConversationParticipant, Message
 
 # ---------------- Programs ----------------
 
@@ -223,17 +227,56 @@ def shift_clock_out_view(request, shift_id):
     return Response(ShiftSerializer(shift).data)
 
 
-@api_view(["POST"])
 def shift_on_my_way_view(request, shift_id):
+    """
+    Sends the client a heads up that the caregiver is on the way, and also
+    posts that as a real chat message so it shows up in Messages, not just
+    a notification. Only allowed on the calendar day of the shift itself,
+    so this cannot be sent a week early by mistake.
+    """
     try:
         shift = Shift.objects.select_related("client").get(id=shift_id, field_staff=request.user)
     except Shift.DoesNotExist:
         return Response({"detail": "Shift not found."}, status=404)
+    if shift.on_my_way_at:
+        return Response({"detail": "You already sent this for this visit."}, status=400)
+    if timezone.localtime(shift.start_time).date() != timezone.localdate():
+        return Response({"detail": "On my way can only be sent on the day of the shift."}, status=400)
+
     shift.on_my_way_at = timezone.now()
     shift.save()
     notify(shift.client, "schedule", "Your caregiver is on the way",
            f"{request.user.full_name} is heading to your visit now.", link="/care")
-    return Response(ShiftSerializer(shift).data)
+
+    # Post the same update as a real chat message, reusing or creating the
+    # direct conversation between this field staff member and the client.
+
+    conversation = (
+        Conversation.objects.filter(participants__user=request.user)
+        .filter(participants__user=shift.client)
+        .first()
+    )
+    if conversation is None:
+        conversation = Conversation.objects.create(created_by=request.user)
+        ConversationParticipant.objects.create(conversation=conversation, user=request.user)
+        ConversationParticipant.objects.create(conversation=conversation, user=shift.client)
+
+    message = Message.objects.create(conversation=conversation, sender=request.user, body="On my way!")
+    payload = {
+        "kind": "message", "conversation_id": conversation.id, "id": message.id,
+        "sender_id": request.user.id, "sender_name": request.user.full_name,
+        "body": message.body, "created_at": message.created_at.isoformat(),
+    }
+    layer = get_channel_layer()
+    for participant in ConversationParticipant.objects.filter(conversation=conversation).select_related("user"):
+        try:
+            async_to_sync(layer.group_send)(f"user_{participant.user_id}", {"type": "push", "payload": payload})
+        except Exception:
+            pass
+        if participant.user_id != request.user.id:
+            notify(participant.user, "messages", f"New message from {request.user.full_name}", message.body, link="/messages")
+
+    return Response({**ShiftSerializer(shift).data, "conversation_id": conversation.id})
 
 
 # ---------------- Shift change approval workflow ----------------
@@ -291,6 +334,8 @@ def change_requests_view(request):
         shift.save()
         notify_role(Roles.CUSTOMER_SERVICE, "schedule", "Client requested a visit change",
                     f"{user.full_name}: {change.reason}", link="/cs/schedule")
+        notify(shift.field_staff, "schedule", "Client requested a change to your visit",
+               f"{user.full_name}: {change.reason}", link="/field")
         return Response(ShiftChangeRequestSerializer(change).data, status=201)
 
     return Response({"detail": "Only field staff and clients file change requests."}, status=403)

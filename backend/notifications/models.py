@@ -19,6 +19,20 @@ NOTIFICATION_CATEGORIES = [
     ("news", "News and announcements"),
 ]
 
+# Which categories are relevant to each role. Controls what shows on that
+# role's own notification settings screen, so nobody is offered a toggle
+# for something that can never actually apply to them (a client has no use
+# for an "Approvals" toggle, that is a staff concept).
+ROLE_CATEGORIES = {
+    "admin": ["messages", "referrals", "schedule", "approvals", "emergencies", "news"],
+    "manager": ["messages", "approvals", "schedule", "emergencies", "news"],
+    "customer_service": ["messages", "referrals", "schedule", "approvals", "emergencies", "news"],
+    "field_staff": ["messages", "schedule", "approvals", "emergencies", "news"],
+    "hospital_partner": ["messages", "referrals", "news"],
+    "client": ["messages", "schedule", "emergencies", "news"],
+    "family": ["news"],
+}
+
 
 class Notification(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")

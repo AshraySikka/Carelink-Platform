@@ -10,7 +10,8 @@ import NotificationsBell from "./NotificationsBell.jsx";
 // Each role sees only its own navigation. Third item is the icon name.
 const NAV = {
   admin: [
-    ["/admin", "Users and invites", "users"],
+    ["/admin", "Dashboard", "home"],
+    ["/admin/users", "Users and invites", "users"],
     ["/admin/programs", "Programs", "grid"],
     ["/admin/integrations", "Integrations", "plug"],
     ["/admin/news", "News posts", "megaphone"],
@@ -60,10 +61,11 @@ const NAV = {
   ],
   client: [
     ["/care", "Home", "heart"],
-    ["/care/family", "Family access", "users"],
+    ["/care/calendar", "Calendar", "calendar"],
     ["/resources", "Resources", "book"],
-    ["/messages", "Messages", "chat"],
     ["/ai-search", "AI search", "sparkles"],
+    ["/care/family", "Family access", "users"],
+    ["/messages", "Messages", "chat"],
     ["/settings", "Settings", "gear"],
   ],
   family: [

@@ -5,6 +5,7 @@ import { homePathFor, useAuth } from "./auth.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import SetPassword from "./pages/SetPassword.jsx";
+import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminPrograms from "./pages/AdminPrograms.jsx";
 import AdminIntegrations from "./pages/AdminIntegrations.jsx";
@@ -17,6 +18,7 @@ import HospitalReferrals from "./pages/HospitalReferrals.jsx";
 import HospitalNew from "./pages/HospitalNew.jsx";
 import FieldSchedule from "./pages/FieldSchedule.jsx";
 import ClientHome from "./pages/ClientHome.jsx";
+import ClientCalendar from "./pages/ClientCalendar.jsx";
 import ClientFamily from "./pages/ClientFamily.jsx";
 import Resources from "./pages/Resources.jsx";
 import AiSearch from "./pages/AiSearch.jsx";
@@ -42,7 +44,8 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/set-password" element={<SetPassword />} />
 
-      <Route path="/admin" element={<Protected roles={["admin"]}><AdminUsers /></Protected>} />
+      <Route path="/admin" element={<Protected roles={["admin"]}><AdminDashboard /></Protected>} />
+      <Route path="/admin/users" element={<Protected roles={["admin"]}><AdminUsers /></Protected>} />
       <Route path="/admin/programs" element={<Protected roles={["admin"]}><AdminPrograms /></Protected>} />
       <Route path="/admin/integrations" element={<Protected roles={["admin"]}><AdminIntegrations /></Protected>} />
       <Route path="/admin/news" element={<Protected roles={["admin"]}><AdminNews /></Protected>} />
@@ -58,6 +61,7 @@ export default function App() {
       <Route path="/field" element={<Protected roles={["field_staff"]}><FieldSchedule /></Protected>} />
 
       <Route path="/care" element={<Protected roles={["client"]}><ClientHome /></Protected>} />
+      <Route path="/care/calendar" element={<Protected roles={["client"]}><ClientCalendar /></Protected>} />
       <Route path="/care/family" element={<Protected roles={["client"]}><ClientFamily /></Protected>} />
 
       <Route path="/family" element={<Protected roles={["family"]}><FamilyView /></Protected>} />

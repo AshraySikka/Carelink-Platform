@@ -2,7 +2,7 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .models import NOTIFICATION_CATEGORIES, Notification, NotificationPreference
+from .models import NOTIFICATION_CATEGORIES, Notification, NotificationPreference, ROLE_CATEGORIES
 from .utils import ensure_default_preferences
 
 
@@ -29,18 +29,20 @@ def mark_read_view(request):
 
 @api_view(["GET", "PATCH"])
 def preferences_view(request):
-    """Read or update the caller's notification settings panel."""
+    """Read or update the caller's notification settings panel.
+    Only shows categories relevant to the caller's own role."""
     ensure_default_preferences(request.user)
+    allowed = ROLE_CATEGORIES.get(request.user.role, [c for c, _ in NOTIFICATION_CATEGORIES])
     if request.method == "PATCH":
         # Body shape: {"messages": true, "referrals": false, ...}
-        for category, _ in NOTIFICATION_CATEGORIES:
+        for category in allowed:
             if category in request.data:
                 NotificationPreference.objects.filter(user=request.user, category=category).update(
                     enabled=bool(request.data[category])
                 )
-    prefs = NotificationPreference.objects.filter(user=request.user)
+    prefs = {p.category: p for p in NotificationPreference.objects.filter(user=request.user, category__in=allowed)}
     labels = dict(NOTIFICATION_CATEGORIES)
     return Response([
-        {"category": p.category, "label": labels.get(p.category, p.category), "enabled": p.enabled}
-        for p in prefs
+        {"category": category, "label": labels.get(category, category), "enabled": prefs[category].enabled}
+        for category in allowed if category in prefs
     ])
