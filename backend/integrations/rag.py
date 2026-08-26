@@ -54,8 +54,12 @@ def retrieve_context(user, question: str) -> str:
 
     chunks = []
 
-    # Published care resources are visible to everyone signed in.
-    for resource in Resource.objects.filter(published=True):
+    # Published care resources, filtered to this role's audience, exactly
+    # like the Resources page and the admin Resources screen agree on.
+    # An empty audience means everyone can see it.
+    resources = Resource.objects.filter(published=True)
+    visible_resources = [r for r in resources if not r.audience or user.role in r.audience]
+    for resource in visible_resources:
         text = f"RESOURCE [{resource.category}] {resource.title}: {resource.summary} {resource.content}"
         chunks.append((_keyword_score(text, question), text[:1200]))
 

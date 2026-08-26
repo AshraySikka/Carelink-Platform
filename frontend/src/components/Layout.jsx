@@ -14,6 +14,7 @@ const NAV = {
     ["/admin/programs", "Programs", "grid"],
     ["/admin/integrations", "Integrations", "plug"],
     ["/admin/news", "News posts", "megaphone"],
+    ["/admin/resources", "Resources", "book"],
     ["/cs", "Operations dashboard", "home"],
     ["/cs/queue", "Referral queue", "clipboard"],
     ["/cs/schedule", "Schedule", "calendar"],

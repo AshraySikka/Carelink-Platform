@@ -119,19 +119,37 @@ REFERRAL_SPECS = [
 
 RESOURCES = [
     ("Preventing falls at home", "Safety", "Simple changes that reduce fall risk.",
-     "Remove loose rugs and clear walkways. Install grab bars in bathrooms. Keep stairs well lit. Wear non slip footwear. Review medications that cause dizziness with your doctor."),
+     "Remove loose rugs and clear walkways. Install grab bars in bathrooms. Keep stairs well lit. Wear non slip footwear. Review medications that cause dizziness with your doctor.",
+     []),
     ("Signs of a stroke, the FAST test", "Emergency", "Recognize a stroke in seconds.",
-     "F: face drooping on one side. A: arm weakness. S: speech difficulty. T: time to call 911. Every minute matters, do not wait to see if symptoms pass."),
+     "F: face drooping on one side. A: arm weakness. S: speech difficulty. T: time to call 911. Every minute matters, do not wait to see if symptoms pass.",
+     []),
     ("Medication management basics", "Health", "Keeping track of medications safely.",
-     "Keep an up to date list of all medications and doses. Use a weekly pill organizer. Set daily alarms. Never share medications. Bring your list to every appointment."),
+     "Keep an up to date list of all medications and doses. Use a weekly pill organizer. Set daily alarms. Never share medications. Bring your list to every appointment.",
+     []),
     ("Caregiver burnout warning signs", "Family Support", "When to ask for help.",
-     "Constant exhaustion, withdrawal from friends, feeling hopeless or resentful, frequent illness, sleep or appetite changes. Respite care exists for this, ask CareLink about relief options."),
+     "Constant exhaustion, withdrawal from friends, feeling hopeless or resentful, frequent illness, sleep or appetite changes. Respite care exists for this, ask CareLink about relief options.",
+     []),
     ("Home oxygen safety", "Safety", "Living safely with supplemental oxygen.",
-     "Keep oxygen at least 3 meters from open flames. No smoking anywhere in the home. Secure tanks upright. Check tubing for kinks daily. Post a sign at the entrance for emergency responders."),
+     "Keep oxygen at least 3 meters from open flames. No smoking anywhere in the home. Secure tanks upright. Check tubing for kinks daily. Post a sign at the entrance for emergency responders.",
+     []),
     ("Nutrition for healing", "Health", "Eating well during recovery.",
-     "Prioritize protein at every meal to rebuild tissue. Stay hydrated, aim for 6 to 8 glasses of water daily unless fluid restricted. Small frequent meals beat large ones when appetite is low."),
+     "Prioritize protein at every meal to rebuild tissue. Stay hydrated, aim for 6 to 8 glasses of water daily unless fluid restricted. Small frequent meals beat large ones when appetite is low.",
+     []),
     ("Understanding dementia behaviors", "Family Support", "Responding with patience and technique.",
-     "Agitation often signals an unmet need: pain, hunger, or overstimulation. Keep routines consistent. Redirect rather than correct. Short answers, calm tone, one question at a time."),
+     "Agitation often signals an unmet need: pain, hunger, or overstimulation. Keep routines consistent. Redirect rather than correct. Short answers, calm tone, one question at a time.",
+     []),
+    # These last two exist specifically to demonstrate audience targeting:
+    # the first is staff only and should never show up for a client, family
+    # member, or hospital partner, on the Resources page or from the AI
+    # assistant. The second is the reverse, client and family facing
+    # wellness content that staff do not need cluttering their own list.
+    ("CareLink incident escalation policy", "Company Policy", "Internal only, not visible to clients or family.",
+     "If a client reports chest pain, shortness of breath, or any life threatening symptom, call 911 immediately, then notify customer service through the Emergencies screen. Do not wait for a callback before calling 911. Document the incident in Clinical documentation once the client is stable.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Mindful breathing for stress", "Wellness", "A simple technique to ease anxiety before a visit or appointment.",
+     "Sit comfortably. Breathe in slowly through your nose for a count of four, hold for four, exhale through your mouth for a count of six. Repeat for two to three minutes.",
+     ["client", "family"]),
 ]
 
 EMERGENCY_DESCRIPTIONS = [
@@ -202,17 +220,39 @@ class Command(BaseCommand):
             ensure_default_preferences(user)
             managers.append(user)
 
+        # Partition the 18 programs across the first 7 managers, a distinct
+        # non overlapping slice each, so their program scoped dashboards
+        # show visibly different data instead of everyone seeing nearly
+        # the whole platform. The 8th manager, demo.mgr08, is deliberately
+        # left with no programs and no team, so the dashboard's "no
+        # programs assigned yet" empty state is also there to check.
+        programmed_managers = managers[:-1]
+        unprogrammed_manager = managers[-1]
+        CHUNK_SIZES = [3, 3, 3, 3, 2, 2, 2]  # sums to 18, one chunk per manager
+        manager_programs = {}
+        cursor = 0
+        for manager, size in zip(programmed_managers, CHUNK_SIZES):
+            chunk = programs[cursor:cursor + size]
+            cursor += size
+            manager.programs.set(chunk)
+            manager_programs[manager.id] = chunk
+
         # ---------------- Field staff (30) ----------------
+        # Each field staff member reports to one of the 7 programmed
+        # managers and works only in that manager's own programs, so a
+        # manager's dashboard, staff directory, and program filter all
+        # agree with each other and with who actually reports to them.
         field_staff = []
         for i in range(30):
             first, last = name_for(200, i)
             credential = CREDENTIALS[i % len(CREDENTIALS)]
             email = f"demo.fs{i + 1:02d}@yopmail.com"
             template = AVAILABILITY_TEMPLATES[i % len(AVAILABILITY_TEMPLATES)]
+            assigned_manager = programmed_managers[i % len(programmed_managers)]
             user = User.objects.create_user(
                 email=email, password=DEMO_PASSWORD, full_name=f"{first} {last}, {credential}",
                 role=Roles.FIELD_STAFF, phone=f"555-03{i:02d}", invite_status=InviteStatus.ACTIVE,
-                manager=managers[i % len(managers)],
+                manager=assigned_manager,
                 address=f"{200 + i * 3} Oak St, Riverside, CA",
                 latitude=43.64 + (i % 10) * 0.006, longitude=-79.40 + (i % 10) * 0.005,
                 date_of_birth=date(1975 + (i % 20), 1 + (i % 12), 1 + (i % 27)),
@@ -220,8 +260,7 @@ class Command(BaseCommand):
                 min_weekly_hours=16 + (i % 5) * 4,
             )
             ensure_default_preferences(user)
-            chosen_programs = [programs[i % len(programs)], programs[(i * 3 + 1) % len(programs)]]
-            user.programs.set(chosen_programs)
+            user.programs.set(manager_programs[assigned_manager.id])
             field_staff.append(user)
 
         # ---------------- Customer service (15) ----------------
@@ -281,12 +320,18 @@ class Command(BaseCommand):
 
         # ---------------- Referrals ----------------
         submitters = hospital_partners
+        # Referrals past the "new" stage get a real assigned caregiver, so
+        # the manager dashboard's referral panels, which are scoped to a
+        # manager's own field staff, actually have something on them
+        # instead of always being empty.
+        ASSIGNABLE_STATUSES = {"accepted", "in_progress", "completed"}
         for idx, (name, urgency, status, concerns, notes, intake) in enumerate(REFERRAL_SPECS):
             hospital = hospitals[idx % len(hospitals)]
             submitter = next((p for p in submitters if p.hospital_id == hospital.id), submitters[idx % len(submitters)])
+            assigned = field_staff[idx % len(field_staff)] if status in ASSIGNABLE_STATUSES else None
             Referral.objects.create(
                 hospital=hospital, submitted_by=submitter, client_name=name, urgency=urgency, status=status,
-                notes=notes, concerns_flag=concerns,
+                notes=notes, concerns_flag=concerns, assigned_staff=assigned,
                 client_details={"age": 60 + idx, "contact": f"555-07{idx:02d}"},
                 intake_data=intake,
             )
@@ -424,8 +469,16 @@ class Command(BaseCommand):
                 emergency_count += 1
 
         # ---------------- Resources and news ----------------
-        for title, category, summary, content in RESOURCES:
-            Resource.objects.get_or_create(title=title, defaults={"category": category, "summary": summary, "content": content})
+        # update_or_create, not get_or_create: resources and news posts are
+        # not wiped at the top of this command like everything else, so a
+        # rerun after editing RESOURCES above (an audience change, for
+        # example) needs to actually apply, not silently keep whatever was
+        # created the first time this command ever ran.
+        for title, category, summary, content, audience in RESOURCES:
+            Resource.objects.update_or_create(
+                title=title,
+                defaults={"category": category, "summary": summary, "content": content, "audience": audience},
+            )
 
         NewsPost.objects.get_or_create(
             title="Welcome to CareLink",
@@ -441,6 +494,11 @@ class Command(BaseCommand):
         )
 
         # ---------------- Starter conversations ----------------
+        # Note: hospital_partners[0] already has a conversation with a CS
+        # agent (below), so that account tests the "reuse an existing
+        # thread" path of the support Connect with an agent button. The
+        # other five hospital partner accounts have none yet, so they test
+        # the "pick a random agent" path instead.
         def seed_conversation(a, b, lines):
             conversation = Conversation.objects.create(created_by=a)
             ConversationParticipant.objects.create(conversation=conversation, user=a)
@@ -468,8 +526,10 @@ class Command(BaseCommand):
             (field_staff[3].manager, "Sure, let's chat after your shift today."),
         ])
 
+        managers_with_programs = sum(1 for m in managers if m.programs.exists())
         self.stdout.write(self.style.SUCCESS(
-            f"Done. {len(managers)} managers, {len(field_staff)} field staff, {len(customer_service)} customer service, "
+            f"Done. {len(managers)} managers ({managers_with_programs} with a program and a team assigned, "
+            f"demo.mgr08 intentionally has neither), {len(field_staff)} field staff, {len(customer_service)} customer service, "
             f"{len(hospital_partners)} hospital partners, {len(clients)} clients, {len(family_users)} family members, "
             f"{len(programs)} programs, {shift_count} shifts, {emergency_count} emergencies "
             f"(every client has at least one). All demo accounts use the password: {DEMO_PASSWORD}"

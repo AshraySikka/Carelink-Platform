@@ -21,6 +21,7 @@ urlpatterns = [
     path("family/", views.family_view),
     path("family/<int:member_id>/", views.family_detail_view),
     path("resources/", views.resources_view),
+    path("resources/<int:resource_id>/", views.resource_detail_view),
     path("news/", views.news_view),
     path("news/<int:post_id>/", views.news_detail_view),
     path("news-settings/", views.news_settings_view),

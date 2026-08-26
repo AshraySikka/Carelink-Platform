@@ -149,12 +149,17 @@ class FamilyMember(models.Model):
 
 
 class Resource(models.Model):
-    """Care guide shown in the resource library, also the AI assistant's knowledge base."""
+    """Care guide shown in the resource library, also the AI assistant's knowledge base.
+    audience is a list of roles allowed to see it, same convention as
+    NewsPost.audience: an empty list means everyone can see it. This is
+    what keeps, for example, a client from seeing an internal company
+    policy, or field staff from seeing content meant for clients."""
     title = models.CharField(max_length=300)
     category = models.CharField(max_length=100)
     summary = models.TextField(blank=True)
     content = models.TextField()
     published = models.BooleanField(default=True)
+    audience = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 

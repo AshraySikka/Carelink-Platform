@@ -92,7 +92,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
 class ResourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resource
-        fields = ["id", "title", "category", "summary", "content", "published", "created_at"]
+        fields = ["id", "title", "category", "summary", "content", "published", "audience", "created_at"]
 
 
 class NewsPostSerializer(serializers.ModelSerializer):

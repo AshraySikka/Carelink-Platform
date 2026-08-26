@@ -11,6 +11,7 @@ import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminPrograms from "./pages/AdminPrograms.jsx";
 import AdminIntegrations from "./pages/AdminIntegrations.jsx";
 import AdminNews from "./pages/AdminNews.jsx";
+import AdminResources from "./pages/AdminResources.jsx";
 import CsDashboard from "./pages/CsDashboard.jsx";
 import CsQueue from "./pages/CsQueue.jsx";
 import CsSchedule from "./pages/CsSchedule.jsx";
@@ -52,6 +53,7 @@ export default function App() {
       <Route path="/admin/programs" element={<Protected roles={["admin"]}><AdminPrograms /></Protected>} />
       <Route path="/admin/integrations" element={<Protected roles={["admin"]}><AdminIntegrations /></Protected>} />
       <Route path="/admin/news" element={<Protected roles={["admin"]}><AdminNews /></Protected>} />
+      <Route path="/admin/resources" element={<Protected roles={["admin"]}><AdminResources /></Protected>} />
 
       <Route path="/manager" element={<Protected roles={["manager"]}><ManagerDashboard /></Protected>} />
 

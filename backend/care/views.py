@@ -550,14 +550,42 @@ def family_detail_view(request, member_id):
 
 @api_view(["GET", "POST"])
 def resources_view(request):
+    user = request.user
     if request.method == "POST":
-        if request.user.role != Roles.ADMIN:
+        if user.role != Roles.ADMIN:
             return Response({"detail": "Only admins manage resources."}, status=403)
         serializer = ResourceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=201)
-    return Response(ResourceSerializer(Resource.objects.filter(published=True).order_by("category", "title"), many=True).data)
+
+    if user.role == Roles.ADMIN:
+        # Admins manage the library, so they see every resource, published
+        # or not, for every audience, not just what their own role can see.
+        resources = Resource.objects.all().order_by("category", "title")
+        return Response(ResourceSerializer(resources, many=True).data)
+
+    # Everyone else only sees published resources targeted at their role.
+    # An empty audience means everyone, same convention as news posts.
+    resources = Resource.objects.filter(published=True).order_by("category", "title")
+    visible = [r for r in resources if not r.audience or user.role in r.audience]
+    return Response(ResourceSerializer(visible, many=True).data)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAdmin])
+def resource_detail_view(request, resource_id):
+    try:
+        resource = Resource.objects.get(id=resource_id)
+    except Resource.DoesNotExist:
+        return Response({"detail": "Resource not found."}, status=404)
+    if request.method == "DELETE":
+        resource.delete()
+        return Response(status=204)
+    serializer = ResourceSerializer(resource, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)
 
 
 
