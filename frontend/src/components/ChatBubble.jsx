@@ -12,18 +12,22 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth.jsx";
+import renderAiText from "../formatAiText.jsx";
 import { useToast } from "../toast.jsx";
 
 // Mirrors AiSearch.jsx's starter prompts, so the same questions work the
-// same way whether asked from the bubble or the full AI search page.
+// same way whether asked from the bubble or the full AI search page. Each
+// one is picked to combine the resource library with real operational
+// data for that role, rather than a plain lookup, so the first thing
+// someone sees the assistant do is genuinely useful.
 const STARTER_PROMPTS = {
-  customer_service: ["Which referrals are high urgency right now?", "Summarize the newest referrals"],
-  admin: ["Which referrals are still new?", "What does the fall prevention guide say?"],
-  manager: ["What change requests are pending?", "Summarize this week's schedule"],
-  field_staff: ["When is my next shift?", "What does the medication guide say?"],
-  client: ["When is my next visit?", "How do I add a family member?"],
-  hospital_partner: ["How do I submit a referral?", "What happens after I submit?"],
-  family: ["What does the caregiver burnout guide say?"],
+  customer_service: ["Which referrals are high urgency right now?", "Which clients have concerns flagged that need follow up?"],
+  admin: ["How many referrals are still unassigned?", "What does our incident escalation policy say?"],
+  manager: ["What change requests are waiting on my approval?", "How many of my team's shifts are today?"],
+  field_staff: ["When is my next shift, and where?", "What should I do if a client refuses medication?"],
+  client: ["When is my next visit, and who's coming?", "What can I do to prevent falls at home?"],
+  hospital_partner: ["What information should I have ready before submitting a referral?", "How is a referral's urgency decided?"],
+  family: ["What does the caregiver burnout guide say?", "How can I tell if my loved one needs more support?"],
 };
 
 export default function ChatBubble() {
@@ -180,7 +184,9 @@ export default function ChatBubble() {
             <>
               <div className="chat-body">
                 {aiHistory.map((m, i) => (
-                  <div key={i} className={`chat-msg ${m.mine ? "mine" : "theirs"}`}>{m.body}</div>
+                  <div key={i} className={`chat-msg ${m.mine ? "mine" : "theirs"}`}>
+                    {m.mine ? m.body : renderAiText(m.body, `ai-${i}`)}
+                  </div>
                 ))}
                 {aiBusy && <div className="chat-msg theirs muted">Thinking...</div>}
               </div>

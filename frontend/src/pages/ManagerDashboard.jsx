@@ -63,7 +63,7 @@ export default function ManagerDashboard() {
       <div className="grid4" style={{ margin: "16px 0" }}>
         <Kpi label="Your field staff" value={staff_count} icon="users" tone="info" />
         <Kpi label="Urgent / Emergency" value={referrals.filter((r) => r.urgency === "high" || r.urgency === "emergency").length} icon="alertCircle" tone="warning" />
-        <Kpi label="Total emergencies" value={openEmergencies.length} icon="alarm" tone="danger" />
+        <Kpi label="Open emergencies" value={openEmergencies.length} icon="alarm" tone="danger" />
         <Kpi label="Shifts today" value={shifts.filter((s) => new Date(s.start_time).toDateString() === today).length} icon="calendar" tone="success" />
       </div>
 

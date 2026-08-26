@@ -3,16 +3,19 @@
 import { useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth.jsx";
+import renderAiText from "../formatAiText.jsx";
 import { useToast } from "../toast.jsx";
 
+// Kept identical to ChatBubble.jsx's STARTER_PROMPTS, so the same starter
+// questions work the same way whether asked from here or the chat bubble.
 const EXAMPLES = {
-  customer_service: ["Which referrals are high urgency right now?", "Summarize the newest referrals"],
-  admin: ["Which referrals are still new?", "What does the fall prevention guide say?"],
-  manager: ["What change requests are pending?", "Summarize this week's schedule"],
-  field_staff: ["When is my next shift?", "What does the medication guide say?"],
-  client: ["When is my next visit?", "How do I add a family member?"],
-  hospital_partner: ["How do I submit a referral?", "What happens after I submit?"],
-  family: ["What does the caregiver burnout guide say?"],
+  customer_service: ["Which referrals are high urgency right now?", "Which clients have concerns flagged that need follow up?"],
+  admin: ["How many referrals are still unassigned?", "What does our incident escalation policy say?"],
+  manager: ["What change requests are waiting on my approval?", "How many of my team's shifts are today?"],
+  field_staff: ["When is my next shift, and where?", "What should I do if a client refuses medication?"],
+  client: ["When is my next visit, and who's coming?", "What can I do to prevent falls at home?"],
+  hospital_partner: ["What information should I have ready before submitting a referral?", "How is a referral's urgency decided?"],
+  family: ["What does the caregiver burnout guide say?", "How can I tell if my loved one needs more support?"],
 };
 
 export default function AiSearch() {
@@ -55,8 +58,8 @@ export default function AiSearch() {
           ))}
         </div>
         {answer && (
-          <div style={{ marginTop: 16, whiteSpace: "pre-wrap", background: "var(--primary-soft)", padding: 16, borderRadius: 10 }}>
-            {answer}
+          <div style={{ marginTop: 16, background: "var(--primary-soft)", padding: 16, borderRadius: 10 }}>
+            {renderAiText(answer, "search-answer")}
           </div>
         )}
       </div>

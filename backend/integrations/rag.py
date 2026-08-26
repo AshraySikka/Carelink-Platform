@@ -20,7 +20,7 @@ import json
 import requests
 from django.conf import settings
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
 
 
 def _call_gemini(prompt: str) -> str:
