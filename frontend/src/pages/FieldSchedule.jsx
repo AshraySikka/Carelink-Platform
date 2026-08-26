@@ -5,6 +5,7 @@ import { api } from "../api";
 import Modal from "../components/Modal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../auth.jsx";
+import { BLOCKED_REASON_CODES, REASON_OPTIONS } from "../changeReasons.js";
 import NewsFeed from "../components/NewsFeed.jsx";
 import { fromLocalInputValue } from "../dateInput.js";
 import { useToast } from "../toast.jsx";
@@ -67,7 +68,7 @@ export default function FieldSchedule() {
       <h1>Your schedule</h1>
       <p className="sub">Confirm shifts, clock in/out, and log visit details.</p>
 
-      {tab === "list" && <ListTab shifts={shifts} reload={loadShifts} onDocument={goDocument} />}
+      {tab === "list" && <ListTab shifts={shifts} reload={loadShifts} onDocument={goDocument} onEmergency={() => setEmergencyOpen(true)} />}
       {tab === "calendar" && <CalendarTab shifts={shifts} />}
       {tab === "availability" && <AvailabilityTab />}
       {tab === "documentation" && <DocumentationTab shifts={shifts} presetShiftId={docPresetShiftId} clearPreset={() => setDocPresetShiftId(null)} />}
@@ -80,23 +81,72 @@ export default function FieldSchedule() {
 
 // ---------------- List tab ----------------
 
-function ListTab({ shifts, reload, onDocument }) {
+// Staff cannot clock out until this many minutes before the shift's
+// scheduled end time. Kept in sync with CLOCK_OUT_EARLY_MINUTES in
+// backend/care/views.py.
+const CLOCK_OUT_EARLY_MINUTES = 7;
+
+function ListTab({ shifts, reload, onDocument, onEmergency }) {
   const toast = useToast();
   const [changeFor, setChangeFor] = useState(null);
-  const [changeForm, setChangeForm] = useState({ reason: "", requested_start_time: "", requested_end_time: "" });
+  const [changeType, setChangeType] = useState("reschedule");
+  const [reasonCode, setReasonCode] = useState("");
+  const [otherText, setOtherText] = useState("");
+  const [changeForm, setChangeForm] = useState({ requested_start_time: "", requested_end_time: "" });
+  const [changeBusy, setChangeBusy] = useState(false);
 
-  async function clockIn(shift, override = false) {
+  // Set once a clock-in comes back needing a location override. Holds the
+  // shift, the captured GPS position (reused when the override is
+  // submitted), and the backend's distance message shown as context.
+  const [overrideFor, setOverrideFor] = useState(null);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideBusy, setOverrideBusy] = useState(false);
+
+  const blocked = reasonCode && BLOCKED_REASON_CODES.has(reasonCode);
+
+  function openChange(shift) {
+    setChangeFor(shift);
+    setChangeType("reschedule");
+    setReasonCode("");
+    setOtherText("");
+    setChangeForm({ requested_start_time: "", requested_end_time: "" });
+  }
+
+  async function clockIn(shift) {
     const position = await getPosition();
     try {
-      await api(`/shifts/${shift.id}/clock-in/`, { method: "POST", body: { ...(position || {}), override } });
+      await api(`/shifts/${shift.id}/clock-in/`, { method: "POST", body: { ...(position || {}) } });
       toast("Clocked in.", "success");
       reload();
     } catch (error) {
-      if (error.message.includes("override")) {
-        if (confirm(error.message + "\n\nClock in anyway?")) return clockIn(shift, true);
+      // Both "too far away" and "reason missing" land here as a 400; the
+      // message always mentions the location, so open the same modal and
+      // let the person add (or re-add) a reason before retrying.
+      if (error.message && (error.message.toLowerCase().includes("location") || error.message.toLowerCase().includes("100m"))) {
+        setOverrideFor({ shift, position, message: error.message });
+        setOverrideReason("");
       } else {
         toast(error.message, "error");
       }
+    }
+  }
+
+  async function submitOverride(e) {
+    e.preventDefault();
+    if (!overrideReason.trim() || !overrideFor) return;
+    setOverrideBusy(true);
+    try {
+      await api(`/shifts/${overrideFor.shift.id}/clock-in/`, {
+        method: "POST",
+        body: { ...(overrideFor.position || {}), override: true, override_reason: overrideReason.trim() },
+      });
+      toast("Clocked in. This has been logged and your manager notified.", "success");
+      setOverrideFor(null);
+      reload();
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setOverrideBusy(false);
     }
   }
 
@@ -128,22 +178,27 @@ function ListTab({ shifts, reload, onDocument }) {
 
   async function fileChange(e) {
     e.preventDefault();
+    if (!reasonCode || blocked) return;
+    setChangeBusy(true);
     try {
       await api("/change-requests/", {
         method: "POST",
         body: {
           shift: changeFor.id,
-          reason: changeForm.reason,
+          request_type: changeType,
+          reason_code: reasonCode,
+          reason_other: otherText.trim(),
           requested_start_time: fromLocalInputValue(changeForm.requested_start_time),
           requested_end_time: fromLocalInputValue(changeForm.requested_end_time),
         },
       });
-      toast("Change request sent to your manager for approval.", "success");
+      toast(`${changeType === "cancel" ? "Cancellation" : "Change"} request sent to your manager for approval.`, "success");
       setChangeFor(null);
-      setChangeForm({ reason: "", requested_start_time: "", requested_end_time: "" });
       reload();
     } catch (error) {
       toast(error.message, "error");
+    } finally {
+      setChangeBusy(false);
     }
   }
 
@@ -158,28 +213,38 @@ function ListTab({ shifts, reload, onDocument }) {
       <div className="section-label" style={{ marginTop: 20 }}>Upcoming</div>
       <div className="card tight" style={{ padding: upcoming.length ? 0 : 20 }}>
         {upcoming.length === 0 && <div className="muted center">No upcoming shifts.</div>}
-        {upcoming.map((s) => (
-          <div key={s.id} className="staff-details" style={{ margin: 12, borderRadius: 10 }}>
-            <div className="row between">
-              <div>
-                <strong>{s.client_name}</strong> <StatusBadge value={s.status} />
-                <div className="small">{new Date(s.start_time).toLocaleString()} to {new Date(s.end_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                <div className="muted small">{s.location}</div>
-                {s.status === "change_requested" && <div className="muted small">Awaiting manager decision: {s.change_request_note}</div>}
-              </div>
-              <div className="row">
-                {!s.clock_in_at && !s.on_my_way_at && (
-                  new Date(s.start_time).toDateString() === new Date().toDateString()
-                    ? <button className="btn outline small" onClick={() => sendOnMyWay(s)}>On my way</button>
-                    : <button className="btn outline small" disabled title="Available on the day of the shift">On my way</button>
-                )}
-                {!s.clock_in_at && <button className="btn small" onClick={() => clockIn(s)}>Clock in</button>}
-                {s.clock_in_at && !s.clock_out_at && <button className="btn small" onClick={() => simple(s, "clock-out", "Clocked out. Nice work.")}>Clock out</button>}
-                {!s.clock_in_at && s.status !== "change_requested" && <button className="btn outline small" onClick={() => setChangeFor(s)}>Request change</button>}
+        {upcoming.map((s) => {
+          const earliestClockOut = new Date(new Date(s.end_time).getTime() - CLOCK_OUT_EARLY_MINUTES * 60000);
+          const clockOutEligible = new Date() >= earliestClockOut;
+          return (
+            <div key={s.id} className="staff-details" style={{ margin: 12, borderRadius: 10 }}>
+              <div className="row between">
+                <div>
+                  <strong>{s.client_name}</strong> <StatusBadge value={s.status} />
+                  <div className="small">{new Date(s.start_time).toLocaleString()} to {new Date(s.end_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                  <div className="muted small">{s.location}</div>
+                  {s.status === "change_requested" && <div className="muted small">Awaiting manager decision: {s.change_request_note}</div>}
+                </div>
+                <div className="row">
+                  {!s.clock_in_at && !s.on_my_way_at && (
+                    new Date(s.start_time).toDateString() === new Date().toDateString()
+                      ? <button className="btn outline small" onClick={() => sendOnMyWay(s)}>On my way</button>
+                      : <button className="btn outline small" disabled title="Available on the day of the shift">On my way</button>
+                  )}
+                  {!s.clock_in_at && <button className="btn small" onClick={() => clockIn(s)}>Clock in</button>}
+                  {s.clock_in_at && !s.clock_out_at && (
+                    clockOutEligible ? (
+                      <button className="btn small" onClick={() => simple(s, "clock-out", "Clocked out. Nice work.")}>Clock out</button>
+                    ) : (
+                      <button className="btn small" disabled title={`Available starting ${earliestClockOut.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}>Clock out</button>
+                    )
+                  )}
+                  {!s.clock_in_at && s.status !== "change_requested" && <button className="btn outline small" onClick={() => openChange(s)}>Request change</button>}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {past.length > 0 && (
@@ -203,23 +268,68 @@ function ListTab({ shifts, reload, onDocument }) {
         </>
       )}
 
+      {overrideFor && (
+        <Modal title="Confirm location override" onClose={() => setOverrideFor(null)}>
+          <p className="small" style={{ background: "var(--warning-soft)", padding: 10, borderRadius: 8 }}>{overrideFor.message}</p>
+          <form onSubmit={submitOverride}>
+            <label>Why are you outside the client's location?</label>
+            <textarea rows={3} required value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)}
+              placeholder="e.g. Parking was full, parked across the street" />
+            <p className="muted small">This gets logged on the shift and sent to your manager.</p>
+            <button className="btn" style={{ marginTop: 10 }} disabled={overrideBusy || !overrideReason.trim()}>
+              {overrideBusy ? "Clocking in..." : "Clock in anyway"}
+            </button>
+          </form>
+        </Modal>
+      )}
+
       {changeFor && (
         <Modal title="Request a shift change" onClose={() => setChangeFor(null)}>
           <p className="muted small">Your manager will be notified and can approve or decline. If approved, customer service updates the schedule.</p>
+          <div className="row" style={{ marginBottom: 10 }}>
+            <button type="button" className={`btn small ${changeType === "reschedule" ? "" : "outline"}`} onClick={() => setChangeType("reschedule")}>Reschedule</button>
+            <button type="button" className={`btn small ${changeType === "cancel" ? "" : "outline"}`} onClick={() => setChangeType("cancel")}>Cancel shift</button>
+          </div>
           <form onSubmit={fileChange}>
             <label>Reason</label>
-            <textarea rows={3} required value={changeForm.reason} onChange={(e) => setChangeForm({ ...changeForm, reason: e.target.value })} />
-            <div className="grid2">
-              <div>
-                <label>Preferred new start (optional)</label>
-                <input type="datetime-local" value={changeForm.requested_start_time} onChange={(e) => setChangeForm({ ...changeForm, requested_start_time: e.target.value })} />
+            <select required value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>
+              <option value="">Select a reason...</option>
+              {REASON_OPTIONS.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
+            </select>
+
+            {blocked ? (
+              <div className="small" style={{ background: "var(--danger-soft)", padding: 10, borderRadius: 8, marginTop: 10 }}>
+                This needs immediate attention, not a queued request. Please use the Emergency button instead so
+                customer service is alerted right away.
+                <div style={{ marginTop: 8 }}>
+                  <button type="button" className="btn danger small" onClick={() => { setChangeFor(null); onEmergency?.(); }}>
+                    Report emergency instead
+                  </button>
+                </div>
               </div>
-              <div>
-                <label>Preferred new end (optional)</label>
-                <input type="datetime-local" value={changeForm.requested_end_time} onChange={(e) => setChangeForm({ ...changeForm, requested_end_time: e.target.value })} />
-              </div>
-            </div>
-            <button className="btn" style={{ marginTop: 14 }}>Send to manager</button>
+            ) : (
+              <>
+                {reasonCode === "other" && (
+                  <>
+                    <label>Please describe</label>
+                    <textarea rows={3} value={otherText} onChange={(e) => setOtherText(e.target.value)} placeholder="Tell us what's going on..." />
+                  </>
+                )}
+                {changeType === "reschedule" && (
+                  <div className="grid2">
+                    <div>
+                      <label>Preferred new start (optional)</label>
+                      <input type="datetime-local" value={changeForm.requested_start_time} onChange={(e) => setChangeForm({ ...changeForm, requested_start_time: e.target.value })} />
+                    </div>
+                    <div>
+                      <label>Preferred new end (optional)</label>
+                      <input type="datetime-local" value={changeForm.requested_end_time} onChange={(e) => setChangeForm({ ...changeForm, requested_end_time: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+                <button className="btn" style={{ marginTop: 14 }} disabled={changeBusy || !reasonCode}>{changeBusy ? "Sending..." : "Send to manager"}</button>
+              </>
+            )}
           </form>
         </Modal>
       )}

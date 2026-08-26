@@ -45,12 +45,12 @@ def change_requests_log(user, params):
     if params.get("status"):
         qs = qs.filter(status=params["status"])
 
-    columns = ["Requested by", "Manager", "Client", "Shift start", "Same day", "Reason", "Status", "Decided by", "Decision note", "Requested at", "Decided at"]
+    columns = ["Requested by", "Type", "Manager", "Client", "Shift start", "Same day", "Reason", "Status", "Decided by", "Decision note", "Requested at", "Decided at"]
     rows = []
     for c in qs.order_by("-created_at"):
         same_day = "Yes" if c.shift and c.shift.start_time.date() == c.created_at.date() else "No"
         rows.append([
-            c.requested_by.full_name, c.manager.full_name if c.manager else "-",
+            c.requested_by.full_name, c.get_request_type_display(), c.manager.full_name if c.manager else "-",
             c.shift.client.full_name if c.shift else "-",
             c.shift.start_time.strftime("%Y-%m-%d %H:%M") if c.shift else "-",
             same_day,
@@ -131,6 +131,35 @@ def shifts_by_staff(user, params):
     return columns, rows
 
 
+# ---------------- Clock-in location overrides ----------------
+
+def geofence_overrides_log(user, params):
+    """
+    Every clock-in that happened outside the 100m radius, with the reason
+    the field staff member gave. Lets an admin or manager spot patterns:
+    the same person overriding every shift, or the same excuse every time.
+    """
+    qs = Shift.objects.filter(geofence_override=True).select_related("field_staff", "client")
+    if user.role == Roles.MANAGER:
+        qs = qs.filter(field_staff__manager=user)
+    start, end = _parse_date(params.get("start")), _parse_date(params.get("end"))
+    qs = _apply_date_range(qs, "clock_in_at", start, end)
+    if params.get("staff"):
+        qs = qs.filter(field_staff_id=params["staff"])
+
+    columns = ["Field staff", "Client", "Shift start", "Clocked in at", "Distance (m)", "Reason given"]
+    rows = []
+    for s in qs.order_by("-clock_in_at"):
+        rows.append([
+            s.field_staff.full_name, s.client.full_name,
+            s.start_time.strftime("%Y-%m-%d %H:%M"),
+            s.clock_in_at.strftime("%Y-%m-%d %H:%M") if s.clock_in_at else "-",
+            s.geofence_override_distance_meters if s.geofence_override_distance_meters is not None else "-",
+            s.geofence_override_reason or "-",
+        ])
+    return columns, rows
+
+
 # ---------------- Emergencies, full log (admin only) ----------------
 
 def emergencies_log(user, params):
@@ -167,6 +196,7 @@ REPORTS = {
     "change_requests_log": {"label": "Shift change requests, full log", "fn": change_requests_log, "roles": [Roles.ADMIN, Roles.MANAGER], "staff_filter": True, "status_options": ["pending", "approved", "declined"]},
     "change_requests_by_staff": {"label": "Shift change requests per staff", "fn": change_requests_by_staff, "roles": [Roles.ADMIN, Roles.MANAGER], "staff_filter": False, "status_options": []},
     "shifts_by_staff": {"label": "Shifts per staff", "fn": shifts_by_staff, "roles": [Roles.ADMIN, Roles.MANAGER], "staff_filter": False, "status_options": []},
+    "geofence_overrides_log": {"label": "Clock-in location overrides", "fn": geofence_overrides_log, "roles": [Roles.ADMIN, Roles.MANAGER], "staff_filter": True, "status_options": []},
     "referrals_log": {"label": "Referrals, full log", "fn": referrals_log, "roles": [Roles.ADMIN], "staff_filter": False, "status_options": ["new", "accepted", "in_progress", "on_hold", "completed", "declined"]},
     "emergencies_log": {"label": "Emergency requests, full log", "fn": emergencies_log, "roles": [Roles.ADMIN], "staff_filter": False, "status_options": ["new", "acknowledged", "resolved"]},
     "messages_by_user": {"label": "Messages sent per user", "fn": messages_by_user, "roles": [Roles.ADMIN], "staff_filter": False, "status_options": []},

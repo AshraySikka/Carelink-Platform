@@ -1,6 +1,7 @@
 // Client calendar: month grid of visits. Clicking a day with a visit opens
 // its details, with buttons to message the caregiver or request a change.
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import Icon from "../components/Icons.jsx";
 import Modal from "../components/Modal.jsx";
@@ -19,6 +20,7 @@ function startOfWeek(date) {
 
 export default function ClientCalendar() {
   const toast = useToast();
+  const navigate = useNavigate();
   const [shifts, setShifts] = useState([]);
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
   const [activeDay, setActiveDay] = useState(null); // Date object
@@ -114,7 +116,7 @@ export default function ClientCalendar() {
         </Modal>
       )}
 
-      {changeFor && <RequestChangeModal shift={changeFor} onClose={() => setChangeFor(null)} onSent={load} />}
+      {changeFor && <RequestChangeModal shift={changeFor} onClose={() => setChangeFor(null)} onSent={load} onEmergency={() => navigate("/care")} />}
     </div>
   );
 }

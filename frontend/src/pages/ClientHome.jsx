@@ -78,7 +78,7 @@ export default function ClientHome() {
         </Modal>
       )}
 
-      {changeFor && <RequestChangeModal shift={changeFor} onClose={() => setChangeFor(null)} onSent={load} />}
+      {changeFor && <RequestChangeModal shift={changeFor} onClose={() => setChangeFor(null)} onSent={load} onEmergency={() => setEmergencyOpen(true)} />}
     </div>
   );
 }

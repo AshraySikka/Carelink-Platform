@@ -13,9 +13,10 @@ from accounts.models import Roles, User
 from accounts.permissions import IsAdmin, IsAdminOrCS, IsSchedulingStaff
 from notifications.utils import notify, notify_role
 from .models import (
-    ChangeRequestStatus, ClinicalDocument, EmergencyRequest, FamilyMember,
-    NewsPost, PlatformSetting, Program, Referral, ReferralDocument,
-    ReferralStatus, Resource, Shift, ShiftChangeRequest, ShiftStatus,
+    BLOCKED_REASON_CODES, ChangeReasonCode, ChangeRequestStatus, ChangeRequestType,
+    ClinicalDocument, EmergencyRequest, FamilyMember, NewsPost, PlatformSetting,
+    Program, Referral, ReferralDocument, ReferralStatus, Resource, Shift,
+    ShiftChangeRequest, ShiftStatus,
 )
 from .serializers import (
     ClinicalDocumentSerializer, EmergencySerializer, FamilyMemberSerializer,
@@ -110,7 +111,11 @@ def referral_detail_view(request, referral_id):
 
 @api_view(["POST"])
 def referral_documents_view(request, referral_id):
-    """Attach an uploaded file to a referral."""
+    """
+    Attach an uploaded file to a referral. Not restricted to any particular
+    referral status, so a hospital partner can add documents at any point,
+    not just while the referral is still new.
+    """
     try:
         referral = _referral_queryset_for(request.user).get(id=referral_id)
     except Referral.DoesNotExist:
@@ -168,7 +173,7 @@ def shift_detail_view(request, shift_id):
             return Response({"detail": "Only scheduling staff can delete shifts."}, status=403)
         shift.delete()
         return Response(status=204)
-    old_start, old_end = shift.start_time, shift.end_time
+    old_start, old_end, old_status = shift.start_time, shift.end_time, shift.status
     serializer = ShiftSerializer(shift, data=request.data, partial=True)
     serializer.is_valid(raise_exception=True)
     shift = serializer.save()
@@ -187,6 +192,11 @@ def shift_detail_view(request, shift_id):
         new_range = f"{timezone.localtime(shift.start_time):%b %d, %I:%M %p} to {timezone.localtime(shift.end_time):%I:%M %p}"
         notify(shift.field_staff, "schedule", "Your shift time was updated", f"New time: {new_range}.", link="/field")
         notify(shift.client, "schedule", "Your visit time was updated", f"New time: {new_range}.", link="/care")
+    if request.data.get("status") == ShiftStatus.CANCELLED and old_status != ShiftStatus.CANCELLED:
+        notify(shift.field_staff, "schedule", "Visit cancelled",
+               f"Your visit with {shift.client.full_name} on {shift.start_time:%b %d, %I:%M %p} was cancelled.", link="/field")
+        notify(shift.client, "schedule", "Your visit was cancelled",
+               f"Your visit on {shift.start_time:%b %d, %I:%M %p} was cancelled.", link="/care")
     return Response(ShiftSerializer(shift).data)
 
 
@@ -201,9 +211,16 @@ def _haversine_meters(lat1, lng1, lat2, lng2):
 
 @api_view(["POST"])
 def shift_clock_in_view(request, shift_id):
-    """Clock in, gated to 15 minutes before the start and 100m of the client address."""
+    """
+    Clock in, gated to 15 minutes before the start and 100m of the client
+    address. Clocking in from farther away requires a written reason: it
+    gets logged on the shift, sent to the field staff member's manager,
+    and shows up in the "Clock-in location overrides" report so patterns
+    (the same excuse every time, the same staff member every time) are
+    visible rather than buried in individual notifications.
+    """
     try:
-        shift = Shift.objects.select_related("client").get(id=shift_id, field_staff=request.user)
+        shift = Shift.objects.select_related("client", "field_staff", "field_staff__manager").get(id=shift_id, field_staff=request.user)
     except Shift.DoesNotExist:
         return Response({"detail": "Shift not found."}, status=404)
     if shift.clock_in_at:
@@ -213,6 +230,8 @@ def shift_clock_in_view(request, shift_id):
         return Response({"detail": "You can only clock in within 15 minutes of the scheduled start."}, status=400)
 
     override = False
+    override_distance = None
+    override_reason = (request.data.get("override_reason") or "").strip()
     lat, lng = request.data.get("latitude"), request.data.get("longitude")
     client = shift.client
     if lat is not None and lng is not None and client.latitude is not None and client.longitude is not None:
@@ -223,13 +242,34 @@ def shift_clock_in_view(request, shift_id):
                     {"detail": f"You are {round(distance)}m from the client address (limit 100m). Confirm override to clock in anyway.", "needs_override": True},
                     status=400,
                 )
+            if not override_reason:
+                return Response(
+                    {"detail": "Tell us why you're outside the client's location before we can log this.", "needs_override_reason": True},
+                    status=400,
+                )
             override = True
+            override_distance = round(distance)
 
     shift.clock_in_at = now
     shift.status = ShiftStatus.IN_PROGRESS
     shift.geofence_override = override
+    shift.geofence_override_reason = override_reason if override else ""
+    shift.geofence_override_distance_meters = override_distance
     shift.save()
+
+    if override:
+        distance_text = f"{override_distance}m" if override_distance is not None else "an unrecorded distance"
+        detail = f"{request.user.full_name} clocked in {distance_text} from {client.full_name}'s address. Reason: {override_reason}"
+        if shift.field_staff.manager:
+            notify(shift.field_staff.manager, "schedule", "Clock-in location override", detail, link="/cs/schedule")
+
     return Response(ShiftSerializer(shift).data)
+
+
+# Staff cannot clock out until this many minutes before the shift's
+# scheduled end time. No override, unlike the clock-in geofence check: this
+# exists specifically to stop an early checkout, so it stays a hard block.
+CLOCK_OUT_EARLY_MINUTES = 7
 
 
 @api_view(["POST"])
@@ -238,7 +278,19 @@ def shift_clock_out_view(request, shift_id):
         shift = Shift.objects.get(id=shift_id, field_staff=request.user)
     except Shift.DoesNotExist:
         return Response({"detail": "Shift not found."}, status=404)
-    shift.clock_out_at = timezone.now()
+    if not shift.clock_in_at:
+        return Response({"detail": "You need to clock in before you can clock out."}, status=400)
+    if shift.clock_out_at:
+        return Response({"detail": "Already clocked out."}, status=400)
+    now = timezone.now()
+    earliest = shift.end_time - timezone.timedelta(minutes=CLOCK_OUT_EARLY_MINUTES)
+    if now < earliest:
+        minutes_left = math.ceil((earliest - now).total_seconds() / 60)
+        return Response(
+            {"detail": f"You can clock out starting {CLOCK_OUT_EARLY_MINUTES} minutes before the shift ends. {minutes_left} more minute(s) to go."},
+            status=400,
+        )
+    shift.clock_out_at = now
     shift.status = ShiftStatus.COMPLETED
     shift.save()
     return Response(ShiftSerializer(shift).data)
@@ -305,7 +357,11 @@ def change_requests_view(request):
     GET: the requests the caller should see.
       Managers see their own approval queue. Field staff see their requests.
       Admin and CS see everything.
-    POST: field staff file a new request. Their manager is notified.
+    POST: field staff file a new request (reschedule or cancel). Their
+      manager is notified. A blocked reason code (an in-progress safety or
+      medical concern) is rejected here rather than queued, since those
+      need customer service alerted immediately, not a manager decision
+      that might sit unanswered.
     """
     user = request.user
     if request.method == "GET":
@@ -322,7 +378,36 @@ def change_requests_view(request):
 
     # Filing a request. Field staff go through manager approval. Clients can
     # also request changes, those route straight to customer service.
-    serializer = ShiftChangeRequestSerializer(data=request.data)
+    reason_code = request.data.get("reason_code")
+    if reason_code not in ChangeReasonCode.values:
+        return Response({"detail": "Pick a reason from the list."}, status=400)
+    if reason_code in BLOCKED_REASON_CODES:
+        return Response({
+            "detail": "This needs immediate attention, not a queued request. Please use Emergency request instead so customer service is alerted right away.",
+            "redirect": "emergency",
+        }, status=400)
+    request_type = request.data.get("request_type")
+    if request_type not in ChangeRequestType.values:
+        return Response({"detail": "Pick reschedule or cancel."}, status=400)
+
+    other_text = (request.data.get("reason_other") or "").strip()
+    label = ChangeReasonCode(reason_code).label
+    type_label = "Cancellation" if request_type == ChangeRequestType.CANCEL else "Reschedule"
+    reason_text = f"{type_label} - {label}"
+    if reason_code == ChangeReasonCode.OTHER and other_text:
+        reason_text += f": {other_text}"
+    elif other_text:
+        reason_text += f" ({other_text})"
+
+    payload = {
+        "shift": request.data.get("shift"),
+        "request_type": request_type,
+        "reason_code": reason_code,
+        "reason": reason_text,
+        "requested_start_time": request.data.get("requested_start_time"),
+        "requested_end_time": request.data.get("requested_end_time"),
+    }
+    serializer = ShiftChangeRequestSerializer(data=payload)
     serializer.is_valid(raise_exception=True)
     shift = serializer.validated_data["shift"]
 
@@ -337,8 +422,8 @@ def change_requests_view(request):
         shift.requested_start_time = change.requested_start_time
         shift.requested_end_time = change.requested_end_time
         shift.save()
-        notify(user.manager, "approvals", "Shift change needs your approval",
-               f"{user.full_name} requested a change to their {shift.start_time:%b %d} shift: {change.reason}", link="/approvals")
+        notify(user.manager, "approvals", f"{type_label} request needs your approval",
+               f"{user.full_name} requested a {type_label.lower()} for their {shift.start_time:%b %d} shift: {change.reason}", link="/approvals")
         return Response(ShiftChangeRequestSerializer(change).data, status=201)
 
     if user.role == Roles.CLIENT:
@@ -350,9 +435,9 @@ def change_requests_view(request):
         shift.requested_start_time = change.requested_start_time
         shift.requested_end_time = change.requested_end_time
         shift.save()
-        notify_role(Roles.CUSTOMER_SERVICE, "schedule", "Client requested a visit change",
+        notify_role(Roles.CUSTOMER_SERVICE, "schedule", f"Client requested a {type_label.lower()}",
                     f"{user.full_name}: {change.reason}", link="/cs/schedule")
-        notify(shift.field_staff, "schedule", "Client requested a change to your visit",
+        notify(shift.field_staff, "schedule", f"Client requested a {type_label.lower()} to your visit",
                f"{user.full_name}: {change.reason}", link="/field")
         return Response(ShiftChangeRequestSerializer(change).data, status=201)
 
@@ -362,7 +447,12 @@ def change_requests_view(request):
 @api_view(["POST"])
 def change_request_decide_view(request, request_id):
     """
-    Manager approves or declines.
+    Manager, customer service, or admin approves or declines.
+
+    Customer service and admins can decide a request too, not just the
+    assigned manager, so an unanswered request is never stuck waiting on
+    one person who might be unreachable. See escalate_change_requests for
+    the scheduled job that pings everyone again as the shift gets close.
 
     Approving does NOT change the shift's actual time by itself. It only
     marks the request approved and tells customer service exactly what was
@@ -377,8 +467,8 @@ def change_request_decide_view(request, request_id):
     except ShiftChangeRequest.DoesNotExist:
         return Response({"detail": "Request not found."}, status=404)
     user = request.user
-    if user.role not in (Roles.ADMIN,) and change.manager_id != user.id:
-        return Response({"detail": "Only the assigned manager can decide this request."}, status=403)
+    if user.role not in (Roles.ADMIN, Roles.CUSTOMER_SERVICE) and change.manager_id != user.id:
+        return Response({"detail": "Only the assigned manager, customer service, or an admin can decide this request."}, status=403)
     if change.status != ChangeRequestStatus.PENDING:
         return Response({"detail": "This request has already been decided."}, status=400)
 

@@ -24,3 +24,21 @@ services:
         sync: false   # Optional, enables the AI assistant and AI search.
       - key: PYTHON_VERSION
         value: "3.12.4"
+
+  # Runs every 15 minutes and notifies the manager, customer service, and
+  # admins again for any shift change request that's still pending as the
+  # shift gets close, so an unanswered request never just sits there
+  # unnoticed. Double check this block against Render's current cron job
+  # blueprint syntax before deploying.
+  - type: cron
+    name: carelink-escalate-changes
+    runtime: python
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    schedule: "*/15 * * * *"
+    startCommand: "python manage.py escalate_change_requests"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false

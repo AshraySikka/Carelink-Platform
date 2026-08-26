@@ -49,6 +49,7 @@ class ShiftSerializer(serializers.ModelSerializer):
             "start_time", "end_time", "location", "status", "notes",
             "change_request_note", "requested_start_time", "requested_end_time",
             "on_my_way_at", "clock_in_at", "clock_out_at", "geofence_override",
+            "geofence_override_reason", "geofence_override_distance_meters",
             "cancelled_at", "cancel_reason", "created_at",
         ]
 
@@ -56,13 +57,15 @@ class ShiftSerializer(serializers.ModelSerializer):
 class ShiftChangeRequestSerializer(serializers.ModelSerializer):
     requested_by_name = serializers.CharField(source="requested_by.full_name", read_only=True)
     decided_by_name = serializers.CharField(source="decided_by.full_name", read_only=True, default=None)
+    reason_code_label = serializers.CharField(source="get_reason_code_display", read_only=True)
     shift_detail = ShiftSerializer(source="shift", read_only=True)
 
     class Meta:
         model = ShiftChangeRequest
         fields = [
             "id", "shift", "shift_detail", "requested_by", "requested_by_name",
-            "manager", "reason", "requested_start_time", "requested_end_time",
+            "manager", "request_type", "reason_code", "reason_code_label", "reason",
+            "requested_start_time", "requested_end_time",
             "status", "decided_by", "decided_by_name", "decision_note", "decided_at", "created_at",
         ]
         read_only_fields = ["requested_by", "manager", "status", "decided_by", "decided_at"]

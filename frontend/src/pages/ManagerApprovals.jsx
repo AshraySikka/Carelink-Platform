@@ -61,6 +61,7 @@ export default function ManagerApprovals() {
               <div className="row between">
                 <div>
                   <strong>{r.requested_by_name}</strong> <StatusBadge value={r.status} />
+                  {r.request_type === "cancel" && <span className="badge danger">Cancellation</span>}
                   {sameDay && <span className="badge danger">Same day</span>}
                   <div className="small">
                     Shift: {r.shift_detail ? `${r.shift_detail.client_name}, ${new Date(r.shift_detail.start_time).toLocaleString()}` : `#${r.shift}`}
@@ -91,7 +92,7 @@ export default function ManagerApprovals() {
           <tbody>
             {decided.map((r) => (
               <tr key={r.id}>
-                <td>{r.requested_by_name}</td>
+                <td>{r.requested_by_name}{r.request_type === "cancel" && <span className="badge danger" style={{ marginLeft: 6 }}>Cancellation</span>}</td>
                 <td className="muted small">{r.reason}</td>
                 <td><StatusBadge value={r.status} /></td>
                 <td className="muted small">{r.decided_by_name || "-"}</td>

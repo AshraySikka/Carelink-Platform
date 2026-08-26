@@ -83,13 +83,18 @@ def retrieve_context(user, question: str) -> str:
     return "\n\n".join(top)
 
 
+# Kept up to date with the actual navigation and workflow, since this is
+# what stops the assistant from confidently describing a screen that
+# doesn't exist for the asking role (for example, hospital partners have
+# no Messages page: they connect with a person from right inside this
+# same assistant chat instead).
 GUIDE_SUMMARY = """CareLink navigation guide:
-Hospital partners submit referrals under My Referrals and click New referral.
+Hospital partners submit referrals under My Referrals and click New referral, then track status there. They do not have a separate Messages page. To reach a person, they ask this assistant (in this same chat window) to connect them with a customer service representative; a "Talk to customer service" option also appears in the chat after a couple of questions, and clicking it pairs them with an available agent right here, no navigation needed.
 Customer service reviews the Referral queue, builds the Schedule, and handles Emergencies.
-Field staff see My Schedule, confirm shifts, clock in within 15 minutes and 100 meters, and log Documentation.
-Clients see their visits on Home and Calendar, manage Family access, browse Resources, and can press Emergency request.
-Managers approve or decline shift change requests under Approvals.
-Everyone can chat under Messages with the people their role is allowed to contact, and tune alerts under Notification settings."""
+Field staff see My Schedule, confirm shifts, clock in within 15 minutes and 100 meters of the client's address (clocking in farther away requires typing a reason, which is logged and sent to their manager), clock out only in the last 7 minutes of the shift with no exceptions, request a reschedule or cancellation with a reason chosen from a set list, and log Documentation.
+Clients see their visits on Home and Calendar, manage Family access, browse Resources, and can press Emergency request. Requesting a reschedule or cancellation on a visit also uses a reason list.
+Managers approve or decline shift change requests under Approvals; customer service and admins can also decide a request if it has been waiting a while.
+Admin, manager, customer service, field staff, and clients can chat under Messages with the people their role is allowed to contact, and tune alerts under Notification settings."""
 
 
 def assistant_answer(user, question: str) -> str:

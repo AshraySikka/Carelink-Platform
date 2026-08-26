@@ -74,6 +74,7 @@ class ShiftStatus(models.TextChoices):
     # not yet actually applied a new time to the shift. Kept distinct from
     # SCHEDULED so nobody mistakes it for a plain, unremarkable shift.
     APPROVED_PENDING_CHANGE = "approved_pending_change", "Approved, Pending Change"
+    CANCELLED = "cancelled", "Cancelled"
 
 
 class Shift(models.Model):
@@ -92,6 +93,11 @@ class Shift(models.Model):
     clock_in_at = models.DateTimeField(null=True, blank=True)
     clock_out_at = models.DateTimeField(null=True, blank=True)
     geofence_override = models.BooleanField(default=False)
+    # Required whenever geofence_override is True: why the staff member
+    # clocked in from farther than the 100m limit. Logged, sent to their
+    # manager, and shown in the "Clock-in location overrides" report.
+    geofence_override_reason = models.TextField(blank=True)
+    geofence_override_distance_meters = models.PositiveIntegerField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancel_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -104,6 +110,32 @@ class ChangeRequestStatus(models.TextChoices):
     DECLINED = "declined", "Declined"
 
 
+class ChangeRequestType(models.TextChoices):
+    RESCHEDULE = "reschedule", "Reschedule"
+    CANCEL = "cancel", "Cancel"
+
+
+class ChangeReasonCode(models.TextChoices):
+    ILLNESS = "illness", "I'm sick and can't safely provide care"
+    TRANSPORTATION = "transportation", "Transportation problem (car trouble, no ride, etc.)"
+    PERSONAL_EMERGENCY = "personal_emergency", "Personal emergency"
+    FAMILY_EMERGENCY = "family_emergency", "Family emergency"
+    SCHEDULING_CONFLICT = "scheduling_conflict", "Double booked or scheduling conflict"
+    WEATHER = "weather", "Weather or unsafe travel conditions"
+    CLIENT_NO_LONGER_NEEDS_VISIT = "client_no_longer_needs_visit", "Client no longer needs this visit"
+    CLIENT_SAFETY_CONCERN = "client_safety_concern", "Safety concern at the client's location"
+    CLIENT_MEDICAL_EMERGENCY = "client_medical_emergency", "Client is having a medical emergency right now"
+    OTHER = "other", "Other"
+
+
+# Selecting one of these should never produce a queued change request. It
+# needs customer service alerted right now, not a manager decision later.
+BLOCKED_REASON_CODES = {
+    ChangeReasonCode.CLIENT_SAFETY_CONCERN,
+    ChangeReasonCode.CLIENT_MEDICAL_EMERGENCY,
+}
+
+
 class ShiftChangeRequest(models.Model):
     """
     The approval workflow for field staff shift changes.
@@ -112,10 +144,17 @@ class ShiftChangeRequest(models.Model):
       1. Field staff files a request. Their manager gets a notification.
       2. Manager approves: Customer Service gets notified to reschedule.
          Manager declines: the field staff member gets notified.
+
+    Customer service and admins can also decide a request directly (not
+    just the assigned manager), so an unanswered request is never stuck
+    waiting on one specific person. See escalate_change_requests for the
+    scheduled job that pings everyone again as the shift gets close.
     """
     shift = models.ForeignKey(Shift, on_delete=models.CASCADE, related_name="change_requests")
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="my_change_requests")
     manager = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="approvals_queue")
+    request_type = models.CharField(max_length=20, choices=ChangeRequestType.choices, default=ChangeRequestType.RESCHEDULE)
+    reason_code = models.CharField(max_length=40, choices=ChangeReasonCode.choices, default=ChangeReasonCode.OTHER)
     reason = models.TextField()
     requested_start_time = models.DateTimeField(null=True, blank=True)
     requested_end_time = models.DateTimeField(null=True, blank=True)
@@ -123,6 +162,9 @@ class ShiftChangeRequest(models.Model):
     decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="decided_change_requests")
     decision_note = models.TextField(blank=True)
     decided_at = models.DateTimeField(null=True, blank=True)
+    # Set once an unanswered request has been escalated to CS/admin, so the
+    # scheduled job doesn't notify the same request every time it runs.
+    escalated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 

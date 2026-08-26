@@ -2,6 +2,7 @@
 // full detail and status. Approving a request never moves the shift's time
 // by itself, this page is where a real person applies it, with the manager's
 // approval and the staff member's requested time both right there to copy.
+// Cancellation requests apply directly, since there is no "new time" to fill in.
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import Modal from "../components/Modal.jsx";
@@ -62,6 +63,20 @@ export default function CsChangeRequests() {
     }
   }
 
+  async function cancelShift(request) {
+    if (!confirm(`Cancel the ${request.shift_detail ? new Date(request.shift_detail.start_time).toLocaleDateString() : "shift"} with ${request.shift_detail?.client_name || "this client"}?`)) return;
+    try {
+      await api(`/shifts/${request.shift}/`, {
+        method: "PATCH",
+        body: { status: "cancelled", cancelled_at: new Date().toISOString(), cancel_reason: request.reason },
+      });
+      toast("Shift cancelled. The staff member and client have been notified.", "success");
+      load();
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  }
+
   const visible = filter === "all" ? requests : requests.filter((r) => r.status === filter);
 
   return (
@@ -83,6 +98,7 @@ export default function CsChangeRequests() {
               <div className="row between">
                 <div>
                   <strong>{r.requested_by_name}</strong> <StatusBadge value={r.status} />
+                  {r.request_type === "cancel" && <span className="badge danger">Cancellation</span>}
                   {sameDay && r.status === "pending" && <span className="badge danger">Same day</span>}
                   <div className="small">
                     Shift: {r.shift_detail ? `${r.shift_detail.client_name}, ${new Date(r.shift_detail.start_time).toLocaleString()}` : `#${r.shift}`}
@@ -98,7 +114,9 @@ export default function CsChangeRequests() {
                   )}
                 </div>
                 {r.status === "approved" && (
-                  <button className="btn small" onClick={() => openApply(r)}>Update shift</button>
+                  r.request_type === "cancel"
+                    ? <button className="btn danger small" onClick={() => cancelShift(r)}>Cancel shift</button>
+                    : <button className="btn small" onClick={() => openApply(r)}>Update shift</button>
                 )}
               </div>
             </div>

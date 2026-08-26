@@ -1,5 +1,6 @@
 // Signed in shell: role aware sidebar with icons, notifications bell, and
-// one unified chat bubble (AI assistant + real messaging in one panel).
+// one unified chat bubble (AI assistant + real messaging in one panel for
+// most roles; AI-first with a live agent handoff for hospital partners).
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import ChatBubble from "./ChatBubble.jsx";
@@ -48,10 +49,12 @@ const NAV = {
     ["/resources", "Resources", "book"],
     ["/settings", "Settings", "gear"],
   ],
+  // No Messages link: hospital partners talk to the AI assistant in the
+  // chat bubble, which can connect them to a live CS agent when needed.
+  // See components/ChatBubble.jsx (HospitalPartnerBubble).
   hospital_partner: [
     ["/hospital", "My referrals", "clipboard"],
     ["/hospital/new", "New referral", "plus"],
-    ["/messages", "Messages", "chat"],
     ["/ai-search", "AI search", "sparkles"],
     ["/settings", "Settings", "gear"],
   ],

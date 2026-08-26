@@ -4,7 +4,7 @@ const KIND = {
   accepted: "success", confirmed: "success", completed: "success", approved: "success", active: "success", resolved: "success",
   in_progress: "warning", on_hold: "warning", pending: "warning", change_requested: "warning", acknowledged: "warning", high: "warning",
   approved_pending_change: "warning",
-  declined: "danger", emergency: "danger", deactivated: "danger",
+  declined: "danger", emergency: "danger", deactivated: "danger", cancelled: "danger",
   low: "muted", normal: "muted",
 };
 
