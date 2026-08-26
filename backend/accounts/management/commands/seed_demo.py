@@ -1,10 +1,12 @@
 """
 Seed a large, realistic demo dataset: 1 admin, 8 managers, 30 field staff,
 15 customer service agents, 6 hospital partners across 4 hospitals, 40
-clients, 52 family members, 18 programs, 100+ shifts spanning past, today,
-and future (including several timed close to right now for testing clock
-in and the geofence), a spread of referrals, emergencies, shift change
-requests in every state, news posts, and a few starter conversations.
+clients, 52 family members, 18 programs, hundreds of shifts spanning past,
+today, and future (every client gets 12 shifts from yesterday through two
+weeks out, plus 3 older ones, plus a handful timed close to right now for
+testing clock in and the geofence), a spread of referrals, an emergency for
+every single client, shift change requests in every state, news posts, and
+a few starter conversations.
 
 Run with:  python manage.py seed_demo
 Safe to rerun, it wipes and recreates demo data each time. Uses a fixed
@@ -14,6 +16,7 @@ import random
 from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import Hospital, InviteStatus, Roles, User
@@ -147,6 +150,11 @@ EMERGENCY_DESCRIPTIONS = [
     "Power outage at client's home, checking on medical equipment.",
     "Client had a fall risk near miss on the stairs.",
     "Family reports client has not been eating for two days.",
+    "Client pressed the emergency button, unresponsive on first call back.",
+    "Wound dressing came loose overnight, some bleeding noted.",
+    "Client reports dizziness after standing up too quickly.",
+    "Caregiver noticed irregular heartbeat during a routine check.",
+    "Client locked out after a fall alarm went off outside the home.",
 ]
 
 
@@ -158,10 +166,20 @@ class Command(BaseCommand):
 
         # Referrals reference hospital submitters, which are protected
         # foreign keys, so clear those first or the user delete below fails.
-        Referral.objects.filter(submitted_by__email__startswith="demo.").delete()
-        Referral.objects.filter(submitted_by__email="admin@carelink.demo").delete()
-        User.objects.filter(email__startswith="demo.").delete()
-        User.objects.filter(email="admin@carelink.demo").delete()
+        # A broad filter on purpose: earlier versions of this command used
+        # different email patterns for some roles (an old
+        # "manager1@carelink.demo" style for managers, for example). Every
+        # demo account this command has ever created ends in either
+        # @yopmail.com or @carelink.demo, so matching on that instead of a
+        # single fixed prefix reliably clears out every past run, not just
+        # the current one, and stops stale accounts from silently piling up.
+        demo_accounts = Q(email__iendswith="@yopmail.com") | Q(email__iendswith="@carelink.demo")
+        Referral.objects.filter(submitted_by__email__iendswith="@yopmail.com").delete()
+        Referral.objects.filter(submitted_by__email__iendswith="@carelink.demo").delete()
+        # EmergencyRequest.client and .reporter are SET_NULL, not CASCADE,
+        # so deleting users alone would leave old rows behind as orphans.
+        EmergencyRequest.objects.all().delete()
+        User.objects.filter(demo_accounts).delete()
         Hospital.objects.filter(name__in=HOSPITAL_NAMES).delete()
         Program.objects.filter(name__in=PROGRAM_NAMES).delete()
 
@@ -274,26 +292,43 @@ class Command(BaseCommand):
             )
 
         # ---------------- Shifts (100+) ----------------
-        # Spread across the last 20 days through the next 10 days, one to
-        # three visits per client, staff picked so schedules overlap
-        # realistically. Every shift gets sensible notes some of the time.
+        # Every client gets 12 visits spread across day -1 (yesterday)
+        # through day +14 (two weeks out) inclusive, so the calendar view
+        # always has a full two week spread to show regardless of when this
+        # command is run. A further 3 older visits per client add some
+        # completed history beyond that window for the Past visits table.
         now = timezone.now()
         shift_count = 0
+        WINDOW_OFFSETS = [-1 + (k * 15) // 11 for k in range(12)]  # -1..14, 12 points
+        HISTORY_OFFSETS = [-20, -14, -7]
+
         for ci, client in enumerate(clients):
-            visits = 2 + (ci % 3)  # 2 to 4 visits per client
-            for v in range(visits):
-                day_offset = ((ci * 7 + v * 5) % 30) - 20  # spread -20 to +9 days
-                staff = field_staff[(ci + v) % len(field_staff)]
-                hour = 7 + ((ci + v) % 10)
+            primary = field_staff[ci % len(field_staff)]
+            secondary = field_staff[(ci + 7) % len(field_staff)]
+
+            for k, day_offset in enumerate(WINDOW_OFFSETS):
+                staff = secondary if k % 5 == 4 else primary
+                hour = 7 + (k % 10)
                 start = (now + timedelta(days=day_offset)).replace(hour=hour, minute=0, second=0, microsecond=0)
-                end = start + timedelta(hours=2 + (v % 2))
+                end = start + timedelta(hours=2 + (k % 2))
                 status = ShiftStatus.COMPLETED if start < now else ShiftStatus.SCHEDULED
                 Shift.objects.create(
                     field_staff=staff, client=client, start_time=start, end_time=end,
                     location=client.address, status=status,
-                    notes="Routine visit." if v % 2 == 0 else "",
+                    notes="Routine visit." if k % 2 == 0 else "",
                     clock_in_at=start + timedelta(minutes=2) if status == ShiftStatus.COMPLETED else None,
                     clock_out_at=end - timedelta(minutes=5) if status == ShiftStatus.COMPLETED else None,
+                )
+                shift_count += 1
+
+            for h, day_offset in enumerate(HISTORY_OFFSETS):
+                start = (now + timedelta(days=day_offset)).replace(hour=9 + h, minute=0, second=0, microsecond=0)
+                end = start + timedelta(hours=2)
+                Shift.objects.create(
+                    field_staff=primary, client=client, start_time=start, end_time=end,
+                    location=client.address, status=ShiftStatus.COMPLETED,
+                    notes="Routine visit.",
+                    clock_in_at=start + timedelta(minutes=2), clock_out_at=end - timedelta(minutes=5),
                 )
                 shift_count += 1
 
@@ -367,18 +402,26 @@ class Command(BaseCommand):
             )
 
         # ---------------- Emergencies ----------------
-        for i, description in enumerate(EMERGENCY_DESCRIPTIONS):
-            if i % 3 == 0:
-                # Client reported it themselves.
-                client = clients[i % len(clients)]
-                status = ["new", "acknowledged", "resolved"][i % 3]
+        # Every single client gets at least one emergency on record, so
+        # whichever demo client account you sign in as, there is always
+        # something to see. About a third of clients get a second one too,
+        # giving customer service a realistic backlog to triage.
+        emergency_count = 0
+        for ci, client in enumerate(clients):
+            description = EMERGENCY_DESCRIPTIONS[ci % len(EMERGENCY_DESCRIPTIONS)]
+            status = ["new", "acknowledged", "resolved"][ci % 3]
+            if ci % 2 == 0:
                 EmergencyRequest.objects.create(client=client, source="client", description=description, status=status)
             else:
-                # A field staff member reported it about a client.
-                staff = field_staff[i % len(field_staff)]
-                client = clients[(i * 2) % len(clients)]
-                status = ["new", "acknowledged", "resolved"][i % 3]
+                staff = field_staff[ci % len(field_staff)]
                 EmergencyRequest.objects.create(reporter=staff, client=client, source="staff", description=description, status=status)
+            emergency_count += 1
+
+            if ci % 3 == 0:
+                second_description = EMERGENCY_DESCRIPTIONS[(ci + 7) % len(EMERGENCY_DESCRIPTIONS)]
+                second_staff = field_staff[(ci + 5) % len(field_staff)]
+                EmergencyRequest.objects.create(reporter=second_staff, client=client, source="staff", description=second_description, status="new")
+                emergency_count += 1
 
         # ---------------- Resources and news ----------------
         for title, category, summary, content in RESOURCES:
@@ -428,5 +471,6 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"Done. {len(managers)} managers, {len(field_staff)} field staff, {len(customer_service)} customer service, "
             f"{len(hospital_partners)} hospital partners, {len(clients)} clients, {len(family_users)} family members, "
-            f"{len(programs)} programs, {shift_count} shifts. All demo accounts use the password: {DEMO_PASSWORD}"
+            f"{len(programs)} programs, {shift_count} shifts, {emergency_count} emergencies "
+            f"(every client has at least one). All demo accounts use the password: {DEMO_PASSWORD}"
         ))

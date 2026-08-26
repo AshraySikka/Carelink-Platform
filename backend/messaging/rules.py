@@ -2,12 +2,11 @@
 The messaging permission matrix, in one place.
 
 Allowed pairs:
+  customer service  <-> everyone (customer service is the platform's
+                        universal contact point, so this pair is checked
+                        first and short circuits everything below)
   client            <-> field staff they have EVER shared a shift with
-  customer service  <-> field staff
-  customer service  <-> admin
-  customer service  <-> manager
   admin             <-> hospital partner (the "chat with hospital" button)
-  customer service  <-> hospital partner
   manager           <-> their own direct reports (field staff)
 """
 from accounts.models import Roles, User
@@ -17,6 +16,10 @@ from care.models import Shift
 def can_message(a: User, b: User) -> bool:
     if a.id == b.id:
         return False
+
+    if Roles.CUSTOMER_SERVICE in (a.role, b.role):
+        return True
+
     pair = {a.role, b.role}
 
     if pair == {Roles.CLIENT, Roles.FIELD_STAFF}:
@@ -24,14 +27,6 @@ def can_message(a: User, b: User) -> bool:
         # Ever shared a shift, past or future, per the product decision.
         return Shift.objects.filter(client=client, field_staff=staff).exists()
 
-    if pair == {Roles.CUSTOMER_SERVICE, Roles.FIELD_STAFF}:
-        return True
-    if pair == {Roles.CUSTOMER_SERVICE, Roles.ADMIN}:
-        return True
-    if pair == {Roles.CUSTOMER_SERVICE, Roles.MANAGER}:
-        return True
-    if pair == {Roles.HOSPITAL_PARTNER, Roles.CUSTOMER_SERVICE}:
-        return True
     if pair == {Roles.HOSPITAL_PARTNER, Roles.ADMIN}:
         # Lets admins use "Chat with hospital" from the referral drawer,
         # same as customer service already could.
@@ -58,7 +53,8 @@ def eligible_contacts(user: User):
             base = base | User.objects.filter(id=user.manager_id)
         return base.distinct()
     if role == Roles.CUSTOMER_SERVICE:
-        return User.objects.filter(role__in=[Roles.FIELD_STAFF, Roles.ADMIN, Roles.MANAGER, Roles.HOSPITAL_PARTNER])
+        # Customer service can start a conversation with anyone on the platform.
+        return User.objects.exclude(id=user.id)
     if role == Roles.ADMIN:
         return User.objects.filter(role__in=[Roles.CUSTOMER_SERVICE, Roles.HOSPITAL_PARTNER])
     if role == Roles.HOSPITAL_PARTNER:

@@ -244,6 +244,7 @@ def shift_clock_out_view(request, shift_id):
     return Response(ShiftSerializer(shift).data)
 
 
+@api_view(["POST"])
 def shift_on_my_way_view(request, shift_id):
     """
     Sends the client a heads up that the caregiver is on the way, and also
@@ -430,7 +431,6 @@ def change_request_decide_view(request, request_id):
 
 # ---------------- Emergencies ----------------
 
-@api_view(["GET", "POST"])
 def _notify_family(client_user_id, category, title, body, link=""):
     """Notify every family member linked to a client. Used to keep the
     3 way flow (client, family, customer service) all in sync."""
@@ -465,6 +465,19 @@ def emergencies_view(request):
                     description[:140], link="/cs/emergencies")
         return Response(EmergencySerializer(emergency).data, status=201)
 
+    qs = EmergencyRequest.objects.select_related("client", "reporter").order_by("-created_at")
+    if user.role in (Roles.ADMIN, Roles.CUSTOMER_SERVICE, Roles.MANAGER):
+        pass
+    elif user.role == Roles.CLIENT:
+        qs = qs.filter(client=user)
+    elif user.role == Roles.FIELD_STAFF:
+        qs = qs.filter(reporter=user)
+    elif user.role == Roles.FAMILY:
+        client_ids = FamilyMember.objects.filter(family_user=user).values_list("client_id", flat=True)
+        qs = qs.filter(client_id__in=client_ids)
+    else:
+        qs = qs.none()
+    return Response(EmergencySerializer(qs, many=True).data)
 
 @api_view(["PATCH"])
 @permission_classes([IsAdminOrCS])
@@ -716,3 +729,58 @@ def programs_bulk_view(request):
             updated.append({"row": row_number, "name": name})
 
     return Response({"created": created, "updated": updated, "errors": errors})
+
+
+# ---------------- Manager dashboard ----------------
+
+@api_view(["GET"])
+def manager_dashboard_view(request):
+    """
+    A manager's own dashboard, scoped to the programs assigned to them
+    (admins assign programs to a manager the same way they assign programs
+    to field staff, from the Users screen). Unlike the CS dashboard, this
+    only shows referrals, shifts, and emergencies tied to field staff who
+    are in one of the manager's programs, not the whole platform.
+    """
+    user = request.user
+    if user.role != Roles.MANAGER:
+        return Response({"detail": "Manager only."}, status=403)
+
+    program_ids = list(user.programs.values_list("id", flat=True))
+    staff = User.objects.filter(role=Roles.FIELD_STAFF, programs__id__in=program_ids).distinct()
+    staff_ids = list(staff.values_list("id", flat=True))
+
+    referrals = (
+        Referral.objects.filter(assigned_staff_id__in=staff_ids)
+        .select_related("hospital", "submitted_by", "assigned_staff")
+        .order_by("-created_at")
+    )
+    shifts = (
+        Shift.objects.filter(field_staff_id__in=staff_ids)
+        .select_related("field_staff", "client")
+        .order_by("start_time")
+    )
+    client_ids = shifts.values_list("client_id", flat=True).distinct()
+    emergencies = (
+        (EmergencyRequest.objects.filter(reporter_id__in=staff_ids) | EmergencyRequest.objects.filter(client_id__in=client_ids))
+        .distinct()
+        .select_related("client", "reporter")
+        .order_by("-created_at")
+    )
+    # The approvals queue is still based on direct reports (who actually
+    # asks this manager for shift changes), not programs, so it is left
+    # exactly as the Approvals page already computes it.
+    change_requests = (
+        ShiftChangeRequest.objects.filter(manager=user)
+        .select_related("shift", "requested_by", "shift__client", "shift__field_staff")
+        .order_by("-created_at")
+    )
+
+    return Response({
+        "programs": ProgramSerializer(Program.objects.filter(id__in=program_ids).order_by("name"), many=True).data,
+        "staff_count": staff.count(),
+        "referrals": ReferralSerializer(referrals, many=True).data,
+        "shifts": ShiftSerializer(shifts, many=True).data,
+        "emergencies": EmergencySerializer(emergencies, many=True).data,
+        "change_requests": ShiftChangeRequestSerializer(change_requests, many=True).data,
+    })

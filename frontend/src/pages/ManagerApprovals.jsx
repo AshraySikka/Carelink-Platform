@@ -1,8 +1,9 @@
 // Manager: the shift change approval queue.
-// Approve applies the requested new time to the shift and notifies
-// customer service with full detail (what changed, who approved it).
-// Decline notifies the field staff member who asked and reverts nothing,
-// since the shift never moved off its original time.
+// Approve does NOT move the shift's time by itself. It marks the request
+// approved and notifies customer service with full detail (what changed,
+// who approved it) so a real person applies it on the Change requests
+// screen. Decline notifies the field staff member who asked; the shift
+// never moved off its original time either way.
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import StatusBadge from "../components/StatusBadge.jsx";

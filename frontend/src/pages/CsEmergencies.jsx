@@ -8,6 +8,7 @@ export default function CsEmergencies() {
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [tab, setTab] = useState("all");
+  const [search, setSearch] = useState("");
 
   function load() {
     api("/emergencies/").then(setItems).catch(() => {});
@@ -24,19 +25,35 @@ export default function CsEmergencies() {
     }
   }
 
-  const visible = items.filter((e) => tab === "all" || e.source === tab);
+  let visible = items.filter((e) => tab === "all" || e.source === tab);
+  if (search.trim()) {
+    const q = search.trim().toLowerCase();
+    visible = visible.filter((e) =>
+      (e.description || "").toLowerCase().includes(q) ||
+      (e.client_name || "").toLowerCase().includes(q) ||
+      (e.reporter_name || "").toLowerCase().includes(q)
+    );
+  }
 
   return (
     <div>
-      <div className="row between">
+      <div className="row between" style={{ flexWrap: "wrap", gap: 10 }}>
         <div>
           <h1>Emergency requests</h1>
           <p className="sub">Immediate escalations from clients and field staff.</p>
         </div>
-        <div className="row">
-          <button className={`btn small ${tab === "all" ? "" : "outline"}`} onClick={() => setTab("all")}>All</button>
-          <button className={`btn small ${tab === "client" ? "" : "outline"}`} onClick={() => setTab("client")}>Client</button>
-          <button className={`btn small ${tab === "staff" ? "" : "outline"}`} onClick={() => setTab("staff")}>Staff</button>
+        <div className="row" style={{ flexWrap: "nowrap", gap: 10 }}>
+          <input
+            style={{ minWidth: 220 }}
+            placeholder="Search client, staff, or description..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="row" style={{ flexWrap: "nowrap" }}>
+            <button className={`btn small ${tab === "all" ? "" : "outline"}`} onClick={() => setTab("all")}>All</button>
+            <button className={`btn small ${tab === "client" ? "" : "outline"}`} onClick={() => setTab("client")}>Client</button>
+            <button className={`btn small ${tab === "staff" ? "" : "outline"}`} onClick={() => setTab("staff")}>Staff</button>
+          </div>
         </div>
       </div>
 
@@ -61,7 +78,9 @@ export default function CsEmergencies() {
                 </td>
               </tr>
             ))}
-            {visible.length === 0 && <tr><td colSpan={6} className="muted center">No emergency requests.</td></tr>}
+            {visible.length === 0 && (
+              <tr><td colSpan={6} className="muted center">{search.trim() ? "No emergencies match your search." : "No emergency requests."}</td></tr>
+            )}
           </tbody>
         </table>
       </div>

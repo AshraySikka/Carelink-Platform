@@ -1,10 +1,9 @@
-// Signed in shell: role aware sidebar with icons, notifications bell, and the
-// two floating chat bubbles. The messages bubble hides on the Messages page.
+// Signed in shell: role aware sidebar with icons, notifications bell, and
+// one unified chat bubble (AI assistant + real messaging in one panel).
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
-import AiChatBubble from "./AiChatBubble.jsx";
+import ChatBubble from "./ChatBubble.jsx";
 import Icon from "./Icons.jsx";
-import MessagesBubble from "./MessagesBubble.jsx";
 import NotificationsBell from "./NotificationsBell.jsx";
 
 // Each role sees only its own navigation. Third item is the icon name.
@@ -27,7 +26,7 @@ const NAV = {
     ["/settings", "Settings", "gear"],
   ],
   manager: [
-    ["/cs", "Operations dashboard", "home"],
+    ["/manager", "Manager dashboard", "home"],
     ["/cs/queue", "Referral queue", "clipboard"],
     ["/approvals", "Approvals", "check"],
     ["/cs/change-requests", "Change requests", "check"],
@@ -117,10 +116,9 @@ export default function Layout({ children }) {
         </div>
       </aside>
       <main className="main">{children}</main>
-      {/* The messages bubble hides on the Messages page itself, and family
-          members get a read only experience without messaging. */}
-      {user.role !== "family" && !onMessagesPage && <MessagesBubble />}
-      <AiChatBubble />
+      {/* Hidden on the Messages page itself so it doesn't float over the
+          full page version of the same conversations. */}
+      {!onMessagesPage && <ChatBubble />}
     </div>
   );
 }

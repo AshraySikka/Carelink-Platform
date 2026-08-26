@@ -6,6 +6,7 @@ import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import SetPassword from "./pages/SetPassword.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
+import ManagerDashboard from "./pages/ManagerDashboard.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminPrograms from "./pages/AdminPrograms.jsx";
 import AdminIntegrations from "./pages/AdminIntegrations.jsx";
@@ -52,7 +53,9 @@ export default function App() {
       <Route path="/admin/integrations" element={<Protected roles={["admin"]}><AdminIntegrations /></Protected>} />
       <Route path="/admin/news" element={<Protected roles={["admin"]}><AdminNews /></Protected>} />
 
-      <Route path="/cs" element={<Protected roles={["admin", "customer_service", "manager"]}><CsDashboard /></Protected>} />
+      <Route path="/manager" element={<Protected roles={["manager"]}><ManagerDashboard /></Protected>} />
+
+      <Route path="/cs" element={<Protected roles={["admin", "customer_service"]}><CsDashboard /></Protected>} />
       <Route path="/cs/queue" element={<Protected roles={["admin", "customer_service", "manager"]}><CsQueue /></Protected>} />
       <Route path="/cs/schedule" element={<Protected roles={["admin", "customer_service", "manager"]}><CsSchedule /></Protected>} />
       <Route path="/cs/emergencies" element={<Protected roles={["admin", "customer_service", "manager"]}><CsEmergencies /></Protected>} />

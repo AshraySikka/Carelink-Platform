@@ -89,7 +89,7 @@ export function useAuth() {
 export function homePathFor(role) {
   const map = {
     admin: "/admin",
-    manager: "/approvals",
+    manager: "/manager",
     hospital_partner: "/hospital",
     customer_service: "/cs",
     field_staff: "/field",

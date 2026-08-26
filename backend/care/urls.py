@@ -25,4 +25,5 @@ urlpatterns = [
     path("news/<int:post_id>/", views.news_detail_view),
     path("news-settings/", views.news_settings_view),
     path("clinical-docs/", views.clinical_docs_view),
+    path("manager/dashboard/", views.manager_dashboard_view),
 ]

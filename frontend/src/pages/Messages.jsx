@@ -141,7 +141,7 @@ export default function Messages() {
 
       {pickerOpen && (
         <Modal title="New chat" onClose={() => setPickerOpen(false)}>
-          <p className="muted small">You can only see people your role is allowed to message. For example, clients see caregivers they have had visits with.</p>
+          <p className="muted small">Please select a person from the list to start a chat with.</p>
           <input placeholder="Search by name..." value={contactQuery} onChange={(e) => setContactQuery(e.target.value)} autoFocus />
           <div className="stack" style={{ marginTop: 12 }}>
             {contacts.map((c) => (

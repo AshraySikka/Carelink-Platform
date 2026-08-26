@@ -1,4 +1,6 @@
 """Conversation and message endpoints. Realtime delivery lives in consumers.py."""
+import random
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db.models import Max
@@ -6,7 +8,7 @@ from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from accounts.models import User
+from accounts.models import Roles, User
 from notifications.utils import notify
 from .models import Conversation, ConversationParticipant, Message
 from .rules import can_message, eligible_contacts
@@ -112,3 +114,46 @@ def messages_view(request, conversation_id):
          "body": m.body, "created_at": m.created_at}
         for m in messages
     ])
+
+
+@api_view(["POST"])
+def connect_agent_view(request):
+    """
+    Hospital partner support: pair the caller with a customer service agent.
+
+    Reuses an existing conversation with any customer service agent if the
+    hospital partner already has one, so asking for help twice does not
+    fragment their history across a second random agent. Otherwise picks
+    an active customer service agent at random and starts a conversation
+    with them.
+    """
+    user = request.user
+    if user.role != Roles.HOSPITAL_PARTNER:
+        return Response({"detail": "This is for hospital partners only."}, status=403)
+
+    existing = (
+        ConversationParticipant.objects.filter(user=user)
+        .filter(conversation__participants__user__role=Roles.CUSTOMER_SERVICE)
+        .select_related("conversation")
+        .first()
+    )
+    if existing:
+        other = (
+            ConversationParticipant.objects.filter(conversation=existing.conversation)
+            .exclude(user=user).select_related("user").first()
+        )
+        return Response({
+            "id": existing.conversation.id,
+            "agent_name": other.user.full_name if other else "",
+            "existing": True,
+        })
+
+    agents = list(User.objects.filter(role=Roles.CUSTOMER_SERVICE, invite_status="active"))
+    if not agents:
+        return Response({"detail": "No customer service agents are available right now. Please try again shortly."}, status=503)
+    agent = random.choice(agents)
+
+    conversation = Conversation.objects.create(created_by=user)
+    ConversationParticipant.objects.create(conversation=conversation, user=user)
+    ConversationParticipant.objects.create(conversation=conversation, user=agent)
+    return Response({"id": conversation.id, "agent_name": agent.full_name, "existing": False}, status=201)
