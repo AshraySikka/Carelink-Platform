@@ -7,6 +7,8 @@ import { api } from "../api";
 import Icon from "../components/Icons.jsx";
 import Modal from "../components/Modal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
+import { useAuth } from "../auth.jsx";
+import { fromLocalInputValue, toLocalInputValue } from "../dateInput.js";
 import { useToast } from "../toast.jsx";
 
 const DAYS = [["sun", "Sun"], ["mon", "Mon"], ["tue", "Tue"], ["wed", "Wed"], ["thu", "Thu"], ["fri", "Fri"], ["sat", "Sat"]];
@@ -34,6 +36,7 @@ function AvailabilityChips({ schedule }) {
 }
 
 export default function CsSchedule() {
+  const { subscribe } = useAuth();
   const toast = useToast();
   const [staff, setStaff] = useState([]);
   const [shifts, setShifts] = useState([]);
@@ -60,6 +63,16 @@ export default function CsSchedule() {
     api("/shifts/").then(setShifts).catch(() => {});
   }
 
+  // Keeps the board live: if a shift changes on the backend (a manual edit,
+  // an approval, a clock in) while this page is open, it reloads instead
+  // of showing whatever it had when the page first loaded.
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event.kind === "notification" && (event.category === "schedule" || event.category === "approvals")) loadShifts();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(loadStaff, [search, programFilter, sortByProgram]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadShifts();
@@ -83,7 +96,7 @@ export default function CsSchedule() {
     try {
       await api("/shifts/", {
         method: "POST",
-        body: { field_staff: form.field_staff, client: form.client, start_time: form.start_time, end_time: form.end_time, location: form._clientAddress || "", notes: form.notes },
+        body: { field_staff: form.field_staff, client: form.client, start_time: fromLocalInputValue(form.start_time), end_time: fromLocalInputValue(form.end_time), location: form._clientAddress || "", notes: form.notes },
       });
       toast("Shift created. Staff and client have been notified.", "success");
       setCreating(false);
@@ -96,8 +109,8 @@ export default function CsSchedule() {
   function openEdit(shift) {
     setEditingShift(shift);
     setEditForm({
-      start_time: shift.start_time.slice(0, 16),
-      end_time: shift.end_time.slice(0, 16),
+      start_time: toLocalInputValue(shift.start_time),
+      end_time: toLocalInputValue(shift.end_time),
       notes: shift.notes || "",
       status: shift.status,
     });
@@ -106,7 +119,10 @@ export default function CsSchedule() {
   async function saveEdit(e) {
     e.preventDefault();
     try {
-      await api(`/shifts/${editingShift.id}/`, { method: "PATCH", body: editForm });
+      await api(`/shifts/${editingShift.id}/`, {
+        method: "PATCH",
+        body: { ...editForm, start_time: fromLocalInputValue(editForm.start_time), end_time: fromLocalInputValue(editForm.end_time) },
+      });
       toast("Shift updated.", "success");
       setEditingShift(null);
       loadShifts();
@@ -285,6 +301,7 @@ export default function CsSchedule() {
               <option value="confirmed">confirmed</option>
               <option value="in_progress">in progress</option>
               <option value="completed">completed</option>
+              <option value="approved_pending_change">approved, pending change</option>
             </select>
             <label>Notes</label>
             <textarea rows={3} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />

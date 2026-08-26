@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import Drawer from "../components/Drawer.jsx";
+import Icon from "../components/Icons.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useToast } from "../toast.jsx";
 
@@ -30,6 +31,7 @@ export default function CsQueue() {
   const [openItem, setOpenItem] = useState(null);
   const [manage, setManage] = useState({ status: "", assigned_staff: "", concerns_flag: "", notes: "" });
   const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const urgencyFilter = params.get("urgency") || "";
 
@@ -87,25 +89,53 @@ export default function CsQueue() {
 
   let visible = statusFilter ? referrals.filter((r) => r.status === statusFilter) : referrals;
   if (urgencyFilter) visible = visible.filter((r) => r.urgency === urgencyFilter || (urgencyFilter === "high" && r.urgency === "emergency"));
+  if (search.trim()) {
+    const q = search.trim().toLowerCase();
+    visible = visible.filter((r) => r.client_name.toLowerCase().includes(q) || r.hospital_name.toLowerCase().includes(q));
+  }
   const details = openItem?.client_details || {};
   const intake = openItem?.intake_data || {};
+  const newCount = referrals.filter((r) => r.status === "new").length;
+  const urgentCount = referrals.filter((r) => r.urgency === "high" || r.urgency === "emergency").length;
+  const concernCount = referrals.filter((r) => r.concerns_flag).length;
 
   return (
     <div>
       <h1>Referral queue</h1>
       <p className="sub">Every referral submitted by hospital partners, including future Outlook intake.</p>
+
+      <div className="row" style={{ gap: 10, marginBottom: 16 }}>
+        <div className="stat-chip">
+          <span className="icon-chip info"><Icon name="inbox" size={16} /></span>
+          <div><strong>{newCount}</strong><span className="muted small"> new</span></div>
+        </div>
+        <div className="stat-chip">
+          <span className="icon-chip warning"><Icon name="alertCircle" size={16} /></span>
+          <div><strong>{urgentCount}</strong><span className="muted small"> urgent</span></div>
+        </div>
+        <div className="stat-chip">
+          <span className="icon-chip danger"><Icon name="alarm" size={16} /></span>
+          <div><strong>{concernCount}</strong><span className="muted small"> flagged</span></div>
+        </div>
+      </div>
+
       {urgencyFilter && (
         <div className="row" style={{ marginBottom: 10 }}>
           <span className="badge warning">Urgency: {urgencyFilter} and above</span>
           <button className="btn ghost small" onClick={clearUrgencyFilter}>Clear</button>
         </div>
       )}
-      <div className="row" style={{ marginBottom: 16, gap: 8 }}>
-        <button className={`pill ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")}>All</button>
-        {STATUSES.map((s) => (
-          <button key={s} className={`pill ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s.replaceAll("_", " ")}</button>
-        ))}
+
+      <div className="row between" style={{ marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <button className={`pill ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")}>All</button>
+          {STATUSES.map((s) => (
+            <button key={s} className={`pill ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s.replaceAll("_", " ")}</button>
+          ))}
+        </div>
+        <input style={{ maxWidth: 240 }} placeholder="Search client or hospital..." value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
+
       <div className="card tight">
         <table>
           <thead><tr><th>Client</th><th>Hospital</th><th>Urgency</th><th>Status</th><th>Concerns</th><th>Assigned</th><th>Received</th></tr></thead>

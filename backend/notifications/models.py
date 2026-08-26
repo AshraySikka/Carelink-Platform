@@ -30,7 +30,7 @@ ROLE_CATEGORIES = {
     "field_staff": ["messages", "schedule", "approvals", "emergencies", "news"],
     "hospital_partner": ["messages", "referrals", "news"],
     "client": ["messages", "schedule", "emergencies", "news"],
-    "family": ["news"],
+    "family": ["news", "emergencies"],
 }
 
 

@@ -6,6 +6,7 @@ import Modal from "../components/Modal.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../auth.jsx";
 import NewsFeed from "../components/NewsFeed.jsx";
+import { fromLocalInputValue } from "../dateInput.js";
 import { useToast } from "../toast.jsx";
 
 function getPosition() {
@@ -19,7 +20,7 @@ function getPosition() {
   });
 }
 
-const TABS = [["list", "List"], ["calendar", "Calendar"], ["availability", "Availability"], ["documentation", "Documentation"]];
+const TABS = [["list", "List"], ["calendar", "Calendar"], ["availability", "Availability"], ["documentation", "Documentation"], ["emergencies", "Emergencies"]];
 
 export default function FieldSchedule() {
   const toast = useToast();
@@ -30,10 +31,22 @@ export default function FieldSchedule() {
   // Documentation tab with that shift already selected.
   const [docPresetShiftId, setDocPresetShiftId] = useState(null);
 
+  const { subscribe } = useAuth();
+
   function loadShifts() {
     api("/shifts/").then(setShifts).catch(() => {});
   }
   useEffect(loadShifts, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keeps the schedule live: if customer service updates a shift's time
+  // while this page is already open, it reloads instead of showing the
+  // time it had when the page first loaded.
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event.kind === "notification" && (event.category === "schedule" || event.category === "approvals")) loadShifts();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function goDocument(shiftId) {
     setDocPresetShiftId(shiftId);
@@ -58,6 +71,7 @@ export default function FieldSchedule() {
       {tab === "calendar" && <CalendarTab shifts={shifts} />}
       {tab === "availability" && <AvailabilityTab />}
       {tab === "documentation" && <DocumentationTab shifts={shifts} presetShiftId={docPresetShiftId} clearPreset={() => setDocPresetShiftId(null)} />}
+      {tab === "emergencies" && <EmergenciesTab />}
 
       {emergencyOpen && <EmergencyModal shifts={shifts} onClose={() => setEmergencyOpen(false)} />}
     </div>
@@ -120,8 +134,8 @@ function ListTab({ shifts, reload, onDocument }) {
         body: {
           shift: changeFor.id,
           reason: changeForm.reason,
-          requested_start_time: changeForm.requested_start_time || null,
-          requested_end_time: changeForm.requested_end_time || null,
+          requested_start_time: fromLocalInputValue(changeForm.requested_start_time),
+          requested_end_time: fromLocalInputValue(changeForm.requested_end_time),
         },
       });
       toast("Change request sent to your manager for approval.", "success");
@@ -493,5 +507,35 @@ function EmergencyModal({ shifts, onClose }) {
         <button className="btn danger" style={{ marginTop: 14 }}>Send alert</button>
       </form>
     </Modal>
+  );
+}
+
+
+// ---------------- Emergencies tab ----------------
+
+function EmergenciesTab() {
+  const [emergencies, setEmergencies] = useState([]);
+
+  useEffect(() => {
+    api("/emergencies/").then(setEmergencies).catch(() => {});
+  }, []);
+
+  return (
+    <div>
+      <div className="section-label">Emergencies you have reported</div>
+      <div className="card tight" style={{ padding: emergencies.length ? 0 : 20 }}>
+        {emergencies.length === 0 && <div className="muted center">No emergencies reported.</div>}
+        {emergencies.map((e) => (
+          <div key={e.id} className="news-item" style={{ margin: 12 }}>
+            <div className="row between">
+              <strong>{e.client_name || "Not client specific"}</strong>
+              <StatusBadge value={e.status} />
+            </div>
+            <div className="small">{e.description}</div>
+            <div className="muted small">{new Date(e.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

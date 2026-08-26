@@ -274,7 +274,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
 .staff-details { background: #fbfdfe; border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
 .shift-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; }
 .shift-row:last-child { margin-bottom: 0; }
-.shift-row .actions { display: flex; gap: 6px; flex-shrink: 0; }
+.shift-row .actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 /* Quick link tiles, used on the admin dashboard */
 .quicklinks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -289,3 +289,19 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
 .day-visit:last-child { margin-bottom: 0; }
 .day-visit .row.between { align-items: flex-start; }
 .day-visit .meta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+
+
+/* Widen every modal so date/time pairs and multi-field forms never need
+   horizontal scrolling or get clipped at the edge (Schedule shift, Edit
+   shift, Request a shift change all use this). */
+.modal { max-width: 640px; max-height: 92vh; }
+@media (max-width: 700px) { .modal { max-width: 94vw; } }
+
+/* Small stat chips (used at the top of the referral queue) */
+.stat-chip { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 10px 16px; }
+.stat-chip strong { font-size: 1.15rem; margin-right: 2px; }
+.stat-chip .icon-chip { width: 30px; height: 30px; }
+
+/* A bit more breathing room and a softer header on data tables */
+table th { background: #fbfdfe; }
+table td { padding: 12px 14px; }

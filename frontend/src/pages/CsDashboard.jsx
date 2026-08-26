@@ -48,8 +48,8 @@ export default function CsDashboard() {
   const today = new Date().toDateString();
   const openEmergencies = emergencies.filter((e) => e.status !== "resolved");
   const flagged = referrals.filter((r) => r.concerns_flag);
-  const pendingChanges = changeRequests.filter((c) => c.status === "pending");
   const latestReferrals = [...referrals].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
+  const recentChanges = [...changeRequests].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
 
   return (
     <div>
@@ -98,12 +98,15 @@ export default function CsDashboard() {
           ))}
         </PreviewPanel>
 
-        <PreviewPanel title="Change requests" linkTo="/approvals" linkLabel="Review" empty="No pending change requests.">
-          {pendingChanges.slice(0, 5).map((c) => (
-            <div key={c.id} className="preview-row">
-              <strong>{c.requested_by_name}</strong>
+        <PreviewPanel title="Change requests" linkTo="/cs/change-requests" linkLabel="Review" empty="No change requests yet.">
+          {recentChanges.map((c) => (
+            <Link key={c.id} to="/cs/change-requests" className="preview-row" style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+              <div className="row between">
+                <strong>{c.requested_by_name}</strong>
+                <StatusBadge value={c.status} />
+              </div>
               <div className="muted small">{c.reason}</div>
-            </div>
+            </Link>
           ))}
         </PreviewPanel>
       </div>

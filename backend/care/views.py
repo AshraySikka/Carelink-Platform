@@ -168,9 +168,26 @@ def shift_detail_view(request, shift_id):
             return Response({"detail": "Only scheduling staff can delete shifts."}, status=403)
         shift.delete()
         return Response(status=204)
+    old_start, old_end = shift.start_time, shift.end_time
     serializer = ShiftSerializer(shift, data=request.data, partial=True)
     serializer.is_valid(raise_exception=True)
-    return Response(ShiftSerializer(serializer.save()).data)
+    shift = serializer.save()
+    # Manually moving a shift off "change requested" clears the stale
+    # pending-change fields, so the schedule stops showing a request that
+    # has already been handled by hand.
+    if request.data.get("status") and request.data["status"] != ShiftStatus.CHANGE_REQUESTED and shift.change_request_note:
+        shift.change_request_note = ""
+        shift.requested_start_time = None
+        shift.requested_end_time = None
+        shift.save(update_fields=["change_request_note", "requested_start_time", "requested_end_time"])
+    # A real time change gets a notification, which also doubles as the
+    # signal any open field staff or client screen uses to refresh itself
+    # live instead of showing a stale time until the next page load.
+    if shift.start_time != old_start or shift.end_time != old_end:
+        new_range = f"{timezone.localtime(shift.start_time):%b %d, %I:%M %p} to {timezone.localtime(shift.end_time):%I:%M %p}"
+        notify(shift.field_staff, "schedule", "Your shift time was updated", f"New time: {new_range}.", link="/field")
+        notify(shift.client, "schedule", "Your visit time was updated", f"New time: {new_range}.", link="/care")
+    return Response(ShiftSerializer(shift).data)
 
 
 def _haversine_meters(lat1, lng1, lat2, lng2):
@@ -343,9 +360,19 @@ def change_requests_view(request):
 
 @api_view(["POST"])
 def change_request_decide_view(request, request_id):
-    """Manager approves or declines. Notifications fan out per the workflow."""
+    """
+    Manager approves or declines.
+
+    Approving does NOT change the shift's actual time by itself. It only
+    marks the request approved and tells customer service exactly what was
+    asked for, so a real person applies it deliberately on the Change
+    requests screen. Until that happens, the shift keeps its original time
+    and stays under the field staff member's upcoming visits, it does not
+    disappear or show a stale pending badge. Same day requests are flagged
+    as high priority since there is no time to spare.
+    """
     try:
-        change = ShiftChangeRequest.objects.select_related("shift", "requested_by").get(id=request_id)
+        change = ShiftChangeRequest.objects.select_related("shift", "requested_by", "shift__client").get(id=request_id)
     except ShiftChangeRequest.DoesNotExist:
         return Response({"detail": "Request not found."}, status=404)
     user = request.user
@@ -358,31 +385,60 @@ def change_request_decide_view(request, request_id):
     if decision not in ("approved", "declined"):
         return Response({"detail": "Decision must be approved or declined."}, status=400)
 
+    shift = change.shift
+    is_same_day = timezone.localtime(shift.start_time).date() == timezone.localdate()
+    priority = "High priority, same day: " if is_same_day else ""
+
+    requested_range = None
+    if change.requested_start_time:
+        requested_range = f"{timezone.localtime(change.requested_start_time):%b %d, %I:%M %p}"
+        if change.requested_end_time:
+            requested_range += f" to {timezone.localtime(change.requested_end_time):%I:%M %p}"
+
     change.status = decision
     change.decided_by = user
     change.decision_note = request.data.get("note", "")
     change.decided_at = timezone.now()
     change.save()
 
-    shift = change.shift
+    # Approved: the shift shows a distinct "approved, pending change" status
+    # so it is obviously not just a normal shift, until customer service
+    # actually applies a new time. Declined: it goes straight back to normal.
+    shift.status = ShiftStatus.APPROVED_PENDING_CHANGE if decision == "approved" else ShiftStatus.SCHEDULED
+    shift.change_request_note = ""
+    shift.requested_start_time = None
+    shift.requested_end_time = None
+    shift.save()
+
     if decision == "approved":
-        # Approved: customer service gets notified so they can reschedule.
-        notify_role(Roles.CUSTOMER_SERVICE, "approvals", "Approved shift change to action",
-                    f"{change.requested_by.full_name}'s change for {shift.start_time:%b %d} was approved by {user.full_name}. Please update the schedule.",
-                    link="/cs/schedule")
+        detail = f"Reason: {change.reason}. "
+        detail += f"Requested new time: {requested_range}. " if requested_range else "No specific new time was requested, follow up with the staff member. "
+        detail += f"Approved by {user.full_name}. Update the shift on the Change requests screen."
+
+        notify_role(Roles.CUSTOMER_SERVICE, "approvals", f"{priority}Shift change approved for {change.requested_by.full_name}",
+                    detail, link="/cs/change-requests")
         notify(change.requested_by, "approvals", "Your shift change was approved",
-               "Customer service will update the schedule shortly.", link="/field")
+               f"Approved by {user.full_name}. Customer service will update your schedule shortly.",
+               link="/field")
     else:
-        # Declined: the field staff member is notified and the shift reverts.
-        shift.status = ShiftStatus.SCHEDULED
-        shift.change_request_note = ""
-        shift.save()
         notify(change.requested_by, "approvals", "Your shift change was declined",
-               change.decision_note or "Your manager declined this request. Talk to them for details.", link="/field")
+               f"Your request: {change.reason}. " + (change.decision_note or f"{user.full_name} declined this request. Talk to them for details."),
+               link="/field")
+
     return Response(ShiftChangeRequestSerializer(change).data)
 
 
 # ---------------- Emergencies ----------------
+
+@api_view(["GET", "POST"])
+def _notify_family(client_user_id, category, title, body, link=""):
+    """Notify every family member linked to a client. Used to keep the
+    3 way flow (client, family, customer service) all in sync."""
+    if not client_user_id:
+        return
+    for member in FamilyMember.objects.filter(client_id=client_user_id, family_user__isnull=False).select_related("family_user"):
+        notify(member.family_user, category, title, body, link=link)
+
 
 @api_view(["GET", "POST"])
 def emergencies_view(request):
@@ -393,26 +449,21 @@ def emergencies_view(request):
             return Response({"detail": "Description is required."}, status=400)
         if user.role == Roles.CLIENT:
             emergency = EmergencyRequest.objects.create(client=user, source="client", description=description)
+            # The client reported it themselves, so only their family needs
+            # telling, not the client.
+            _notify_family(user.id, "emergencies", "Emergency reported",
+                            f"{user.full_name} reported: {description[:140]}", link="/family")
         else:
             emergency = EmergencyRequest.objects.create(reporter=user, source="staff", description=description,
                                                         client_id=request.data.get("client") or None)
+            if emergency.client_id:
+                notify(emergency.client, "emergencies", "An emergency was reported for your care",
+                       description[:140], link="/care/emergencies")
+                _notify_family(emergency.client_id, "emergencies", "An emergency was reported",
+                                description[:140], link="/family")
         notify_role(Roles.CUSTOMER_SERVICE, "emergencies", "Emergency request",
                     description[:140], link="/cs/emergencies")
         return Response(EmergencySerializer(emergency).data, status=201)
-
-    qs = EmergencyRequest.objects.select_related("client", "reporter").order_by("-created_at")
-    if user.role in (Roles.ADMIN, Roles.CUSTOMER_SERVICE, Roles.MANAGER):
-        pass
-    elif user.role == Roles.CLIENT:
-        qs = qs.filter(client=user)
-    elif user.role == Roles.FIELD_STAFF:
-        qs = qs.filter(reporter=user)
-    elif user.role == Roles.FAMILY:
-        client_ids = FamilyMember.objects.filter(family_user=user).values_list("client_id", flat=True)
-        qs = qs.filter(client_id__in=client_ids)
-    else:
-        qs = qs.none()
-    return Response(EmergencySerializer(qs, many=True).data)
 
 
 @api_view(["PATCH"])
@@ -422,11 +473,27 @@ def emergency_detail_view(request, emergency_id):
         emergency = EmergencyRequest.objects.get(id=emergency_id)
     except EmergencyRequest.DoesNotExist:
         return Response({"detail": "Not found."}, status=404)
+    status_changed = "status" in request.data and request.data["status"] != emergency.status
     if "status" in request.data:
         emergency.status = request.data["status"]
     if "resolution_notes" in request.data:
         emergency.resolution_notes = request.data["resolution_notes"]
     emergency.save()
+
+    # Closes the loop: the client and their family both hear about status
+    # changes, not just customer service.
+    if status_changed and emergency.client_id:
+        label = {"new": "received", "acknowledged": "acknowledged", "resolved": "resolved"}.get(emergency.status, emergency.status)
+        notify(emergency.client, "emergencies", f"Your emergency request was {label}",
+               emergency.description[:140], link="/care/emergencies")
+        _notify_family(emergency.client_id, "emergencies", f"Emergency request {label}",
+                        emergency.description[:140], link="/family")
+    if status_changed and emergency.reporter_id:
+        # Whoever filed it (typically field staff) hears about the outcome
+        # too, since it concerns them directly.
+        label = {"new": "received", "acknowledged": "acknowledged", "resolved": "resolved"}.get(emergency.status, emergency.status)
+        notify(emergency.reporter, "emergencies", f"Emergency you reported was {label}",
+               emergency.description[:140], link="/field")
     return Response(EmergencySerializer(emergency).data)
 
 

@@ -7,20 +7,23 @@ import StatusBadge from "../components/StatusBadge.jsx";
 export default function FamilyView() {
   const [shifts, setShifts] = useState([]);
   const [emergencies, setEmergencies] = useState([]);
+  const [links, setLinks] = useState([]);
 
   useEffect(() => {
     api("/shifts/").then(setShifts).catch(() => {});
     api("/emergencies/").then(setEmergencies).catch(() => {});
+    api("/family/").then(setLinks).catch(() => {});
   }, []);
 
   const now = new Date();
   const upcoming = shifts.filter((s) => new Date(s.end_time) >= now);
   const recent = shifts.filter((s) => new Date(s.end_time) < now).slice(-10).reverse();
+  const clientNames = [...new Set(links.map((l) => l.client_name).filter(Boolean))];
 
   return (
     <div>
-      <h1>Care overview</h1>
-      <p className="sub">A read only view of your loved one's care schedule.</p>
+      <h1>Care overview{clientNames.length ? ` for ${clientNames.join(", ")}` : ""}</h1>
+      <p className="sub">A read only view of {clientNames.length ? `${clientNames.join(" and ")}'s` : "your loved one's"} care schedule.</p>
 
       <NewsFeed />
 
@@ -49,7 +52,7 @@ export default function FamilyView() {
       </div>
 
       <h2>Recent visits</h2>
-      <div className="card tight">
+      <div className="card tight" style={{ marginBottom: 24 }}>
         <table>
           <thead><tr><th>Caregiver</th><th>When</th><th>Status</th></tr></thead>
           <tbody>
@@ -60,6 +63,23 @@ export default function FamilyView() {
                 <td><StatusBadge value={s.status} /></td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Emergency history</h2>
+      <div className="card tight">
+        <table>
+          <thead><tr><th>Reported</th><th>Description</th><th>Status</th></tr></thead>
+          <tbody>
+            {emergencies.map((e) => (
+              <tr key={e.id}>
+                <td className="muted small">{new Date(e.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
+                <td>{e.description}</td>
+                <td><StatusBadge value={e.status} /></td>
+              </tr>
+            ))}
+            {emergencies.length === 0 && <tr><td colSpan={3} className="muted center">No emergencies reported.</td></tr>}
           </tbody>
         </table>
       </div>

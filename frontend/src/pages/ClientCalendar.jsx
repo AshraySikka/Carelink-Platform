@@ -105,7 +105,7 @@ export default function ClientCalendar() {
               {s.location && <div className="meta"><Icon name="pin" size={15} /> {s.location}</div>}
               <div className="row" style={{ marginTop: 10 }}>
                 <button className="btn outline small" disabled={chatBusy} onClick={() => chatWithCaregiver(s.field_staff, s.field_staff_name)}>Message caregiver</button>
-                {s.status !== "change_requested" && (
+                {s.status !== "change_requested" && new Date(s.end_time) >= new Date() && (
                   <button className="btn outline small" onClick={() => { setChangeFor(s); setActiveDay(null); }}>Request change</button>
                 )}
               </div>

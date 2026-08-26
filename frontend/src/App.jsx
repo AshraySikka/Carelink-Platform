@@ -19,12 +19,14 @@ import HospitalNew from "./pages/HospitalNew.jsx";
 import FieldSchedule from "./pages/FieldSchedule.jsx";
 import ClientHome from "./pages/ClientHome.jsx";
 import ClientCalendar from "./pages/ClientCalendar.jsx";
+import ClientEmergencies from "./pages/ClientEmergencies.jsx";
 import ClientFamily from "./pages/ClientFamily.jsx";
 import Resources from "./pages/Resources.jsx";
 import AiSearch from "./pages/AiSearch.jsx";
 import FamilyView from "./pages/FamilyView.jsx";
 import ManagerApprovals from "./pages/ManagerApprovals.jsx";
 import Messages from "./pages/Messages.jsx";
+import CsChangeRequests from "./pages/CsChangeRequests.jsx";
 import Reports from "./pages/Reports.jsx";
 import Settings from "./pages/Settings.jsx";
 
@@ -62,11 +64,13 @@ export default function App() {
 
       <Route path="/care" element={<Protected roles={["client"]}><ClientHome /></Protected>} />
       <Route path="/care/calendar" element={<Protected roles={["client"]}><ClientCalendar /></Protected>} />
+      <Route path="/care/emergencies" element={<Protected roles={["client"]}><ClientEmergencies /></Protected>} />
       <Route path="/care/family" element={<Protected roles={["client"]}><ClientFamily /></Protected>} />
 
       <Route path="/family" element={<Protected roles={["family"]}><FamilyView /></Protected>} />
 
       <Route path="/approvals" element={<Protected roles={["manager", "admin"]}><ManagerApprovals /></Protected>} />
+      <Route path="/cs/change-requests" element={<Protected roles={["admin", "customer_service", "manager"]}><CsChangeRequests /></Protected>} />
       <Route path="/reports" element={<Protected roles={["admin", "manager"]}><Reports /></Protected>} />
 
       <Route path="/resources" element={<Protected><Resources /></Protected>} />

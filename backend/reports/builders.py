@@ -45,13 +45,15 @@ def change_requests_log(user, params):
     if params.get("status"):
         qs = qs.filter(status=params["status"])
 
-    columns = ["Requested by", "Manager", "Client", "Shift start", "Reason", "Status", "Decided by", "Decision note", "Requested at", "Decided at"]
+    columns = ["Requested by", "Manager", "Client", "Shift start", "Same day", "Reason", "Status", "Decided by", "Decision note", "Requested at", "Decided at"]
     rows = []
     for c in qs.order_by("-created_at"):
+        same_day = "Yes" if c.shift and c.shift.start_time.date() == c.created_at.date() else "No"
         rows.append([
             c.requested_by.full_name, c.manager.full_name if c.manager else "-",
             c.shift.client.full_name if c.shift else "-",
             c.shift.start_time.strftime("%Y-%m-%d %H:%M") if c.shift else "-",
+            same_day,
             c.reason, c.status, c.decided_by.full_name if c.decided_by else "-",
             c.decision_note or "-", c.created_at.strftime("%Y-%m-%d %H:%M"),
             c.decided_at.strftime("%Y-%m-%d %H:%M") if c.decided_at else "-",

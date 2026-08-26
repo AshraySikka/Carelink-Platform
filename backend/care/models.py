@@ -70,6 +70,10 @@ class ShiftStatus(models.TextChoices):
     IN_PROGRESS = "in_progress", "In Progress"
     COMPLETED = "completed", "Completed"
     CHANGE_REQUESTED = "change_requested", "Change Requested"
+    # A manager approved the staff member's change, but customer service has
+    # not yet actually applied a new time to the shift. Kept distinct from
+    # SCHEDULED so nobody mistakes it for a plain, unremarkable shift.
+    APPROVED_PENDING_CHANGE = "approved_pending_change", "Approved, Pending Change"
 
 
 class Shift(models.Model):

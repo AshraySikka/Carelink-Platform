@@ -55,6 +55,7 @@ class ShiftSerializer(serializers.ModelSerializer):
 
 class ShiftChangeRequestSerializer(serializers.ModelSerializer):
     requested_by_name = serializers.CharField(source="requested_by.full_name", read_only=True)
+    decided_by_name = serializers.CharField(source="decided_by.full_name", read_only=True, default=None)
     shift_detail = ShiftSerializer(source="shift", read_only=True)
 
     class Meta:
@@ -62,7 +63,7 @@ class ShiftChangeRequestSerializer(serializers.ModelSerializer):
         fields = [
             "id", "shift", "shift_detail", "requested_by", "requested_by_name",
             "manager", "reason", "requested_start_time", "requested_end_time",
-            "status", "decided_by", "decision_note", "decided_at", "created_at",
+            "status", "decided_by", "decided_by_name", "decision_note", "decided_at", "created_at",
         ]
         read_only_fields = ["requested_by", "manager", "status", "decided_by", "decided_at"]
 
@@ -78,10 +79,11 @@ class EmergencySerializer(serializers.ModelSerializer):
 
 class FamilyMemberSerializer(serializers.ModelSerializer):
     linked = serializers.SerializerMethodField()
+    client_name = serializers.CharField(source="client.full_name", read_only=True)
 
     class Meta:
         model = FamilyMember
-        fields = ["id", "family_name", "family_email", "family_user", "linked", "created_at"]
+        fields = ["id", "client_name", "family_name", "family_email", "family_user", "linked", "created_at"]
 
     def get_linked(self, obj):
         return obj.family_user_id is not None
