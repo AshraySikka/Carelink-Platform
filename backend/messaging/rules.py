@@ -5,8 +5,10 @@ Allowed pairs:
   customer service  <-> everyone (customer service is the platform's
                         universal contact point, so this pair is checked
                         first and short circuits everything below)
+  admin              <-> everyone (same reasoning: an admin should be able
+                        to reach anyone on the platform for support or
+                        oversight, not just hospital partners and CS)
   client            <-> field staff they have EVER shared a shift with
-  admin             <-> hospital partner (the "chat with hospital" button)
   manager           <-> their own direct reports (field staff)
 """
 from accounts.models import Roles, User
@@ -17,7 +19,7 @@ def can_message(a: User, b: User) -> bool:
     if a.id == b.id:
         return False
 
-    if Roles.CUSTOMER_SERVICE in (a.role, b.role):
+    if Roles.CUSTOMER_SERVICE in (a.role, b.role) or Roles.ADMIN in (a.role, b.role):
         return True
 
     pair = {a.role, b.role}
@@ -26,11 +28,6 @@ def can_message(a: User, b: User) -> bool:
         client, staff = (a, b) if a.role == Roles.CLIENT else (b, a)
         # Ever shared a shift, past or future, per the product decision.
         return Shift.objects.filter(client=client, field_staff=staff).exists()
-
-    if pair == {Roles.HOSPITAL_PARTNER, Roles.ADMIN}:
-        # Lets admins use "Chat with hospital" from the referral drawer,
-        # same as customer service already could.
-        return True
 
     if pair == {Roles.MANAGER, Roles.FIELD_STAFF}:
         manager, staff = (a, b) if a.role == Roles.MANAGER else (b, a)
@@ -52,11 +49,10 @@ def eligible_contacts(user: User):
         if user.manager_id:
             base = base | User.objects.filter(id=user.manager_id)
         return base.distinct()
-    if role == Roles.CUSTOMER_SERVICE:
-        # Customer service can start a conversation with anyone on the platform.
+    if role in (Roles.CUSTOMER_SERVICE, Roles.ADMIN):
+        # Both customer service and admin can start a conversation with
+        # anyone on the platform.
         return User.objects.exclude(id=user.id)
-    if role == Roles.ADMIN:
-        return User.objects.filter(role__in=[Roles.CUSTOMER_SERVICE, Roles.HOSPITAL_PARTNER])
     if role == Roles.HOSPITAL_PARTNER:
         return User.objects.filter(role__in=[Roles.CUSTOMER_SERVICE, Roles.ADMIN])
     if role == Roles.MANAGER:

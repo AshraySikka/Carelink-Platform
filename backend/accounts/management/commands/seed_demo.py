@@ -5,12 +5,23 @@ clients, 52 family members, 18 programs, hundreds of shifts spanning past,
 today, and future (every client gets 12 shifts from yesterday through two
 weeks out, plus 3 older ones, plus a handful timed close to right now for
 testing clock in and the geofence), a spread of referrals, an emergency for
-every single client, shift change requests in every state, news posts, and
-a few starter conversations.
+every single client, shift change requests in every state, a 65 item
+resource library spanning chronic conditions, safety, emergencies, family
+support, wellness, staff policy, and client rights, news posts, and a few
+starter conversations.
 
 Run with:  python manage.py seed_demo
-Safe to rerun, it wipes and recreates demo data each time. Uses a fixed
-random seed so the same command always produces the same dataset.
+Safe to rerun, it wipes and recreates demo data each time (except resources
+and news posts, which use update_or_create so hand edits in the admin
+panel are not wiped, only refreshed if you also edit RESOURCES below).
+Uses a fixed random seed so the same command always produces the same
+dataset.
+
+If GEMINI_API_KEY is set when you run this, each resource gets embedded
+automatically as it's saved (see integrations/signals.py), so the AI
+agent's resource search works immediately. If you add the key after
+already seeding, run `python manage.py backfill_resource_embeddings` once
+to catch up the resources that were saved before the key existed.
 """
 import random
 from datetime import date, timedelta
@@ -139,6 +150,191 @@ RESOURCES = [
     ("Understanding dementia behaviors", "Family Support", "Responding with patience and technique.",
      "Agitation often signals an unmet need: pain, hunger, or overstimulation. Keep routines consistent. Redirect rather than correct. Short answers, calm tone, one question at a time.",
      []),
+
+    # ---- Chronic Conditions ----
+    ("Diabetes care basics", "Chronic Conditions", "Watching blood sugar and preventing complications.",
+     "Check blood sugar at the times your doctor recommends and log every reading. Watch for shakiness, confusion, or sweating, signs of low blood sugar. Keep a fast acting sugar source on hand. Rotate injection sites to avoid skin damage.",
+     []),
+    ("Managing high blood pressure at home", "Chronic Conditions", "Simple daily habits that help control blood pressure.",
+     "Take blood pressure medication at the same time every day. Limit added salt in cooking. Track readings in a log to share at appointments. Report any reading over 180/120 to a doctor right away.",
+     []),
+    ("Living well with COPD", "Chronic Conditions", "Breathing easier day to day.",
+     "Pace activities and rest before you feel out of breath, not after. Use pursed lip breathing during exertion: in through the nose, out slowly through pursed lips. Keep rescue inhalers within reach at all times. Avoid smoke, dust, and strong fumes.",
+     []),
+    ("Parkinson's disease, day to day tips", "Chronic Conditions", "Supporting movement, balance, and routine.",
+     "Give extra time for tasks rather than rushing. Clear walkways of clutter and loose rugs to reduce freezing episodes. Medication timing matters a great deal, keep doses on schedule even on hard days. Encourage large, deliberate movements when walking.",
+     []),
+    ("Arthritis pain management without medication", "Chronic Conditions", "Non-drug ways to ease joint pain.",
+     "Warm showers or heating pads loosen stiff joints before activity. Gentle range of motion movement most days helps more than rest. Ice can calm a flare after activity. Supportive, well fitted shoes reduce strain on hips and knees.",
+     []),
+    ("Congestive heart failure, watching for fluid buildup", "Chronic Conditions", "Early signs that need attention.",
+     "Weigh the client at the same time each morning; a gain of 3 or more pounds in a day, or 5 in a week, needs a call to the doctor. Watch for swollen ankles, shortness of breath when lying flat, or sudden fatigue. Keep salt intake low as instructed.",
+     []),
+
+    # ---- Health ----
+    ("Recognizing dehydration in older adults", "Health", "Seniors often don't feel thirsty even when dehydrated.",
+     "Watch for dark urine, dry mouth, confusion, or dizziness. Offer small sips of water throughout the day rather than large amounts at once. Water rich foods like watermelon and cucumber can help too.",
+     []),
+    ("Recognizing a urinary tract infection in seniors", "Health", "UTIs often look like confusion, not pain, in older adults.",
+     "Sudden confusion, agitation, or a fall can be the first sign of a UTI in an older adult, sometimes before any burning or urgency. Cloudy or strong smelling urine is another clue. Report new confusion promptly rather than assuming it's just a bad day.",
+     []),
+    ("Recognizing sepsis early", "Health", "A medical emergency that can look like the flu at first.",
+     "Watch for a combination of fever or feeling unusually cold, a fast heart rate, confusion, and extreme discomfort, especially after a recent infection, wound, or hospital stay. Sepsis can worsen quickly. If suspected, treat it as an emergency and get medical help right away.",
+     []),
+    ("Managing constipation safely", "Health", "A common but often overlooked issue in home care.",
+     "Encourage fluids and fiber rich foods if the diet allows them. Gentle movement, even short walks, helps. Track how many days it has been, and mention it at the next appointment rather than reaching for a laxative without guidance.",
+     []),
+    ("Denture care basics", "Health", "Keeping dentures clean and comfortable.",
+     "Rinse dentures after every meal and brush them daily with a denture brush, not regular toothpaste, which can be too abrasive. Store them in water or a denture solution overnight, never wrapped in a napkin where they can be lost. Report any sore spots to a dentist.",
+     []),
+    ("Hearing aid care and communication tips", "Health", "Getting the most out of hearing aids.",
+     "Clean the earpiece daily with a soft dry cloth and remove aids before showering. Change batteries at the first sign of weak or crackling sound. When speaking with someone who is hard of hearing, face them, speak clearly, and avoid shouting, it distorts speech more than it helps.",
+     []),
+    ("Vision loss, communication and home setup tips", "Health", "Making a home easier to navigate safely.",
+     "Keep furniture and walkways in consistent places, don't rearrange without warning. Use contrasting colors for edges of steps and thresholds. When entering a room, announce yourself by name rather than assuming you're recognized by footsteps alone.",
+     []),
+    ("Safe medication disposal", "Health", "Getting rid of old or unused medication properly.",
+     "Do not flush most medications or throw them in the trash where they can be found. Many pharmacies offer a take back program or a secure drop box. If neither is available, mix pills with something undesirable like used coffee grounds before sealing and discarding.",
+     []),
+    ("Common medication side effects to watch for", "Health", "What warrants a call to the doctor versus watchful waiting.",
+     "Mild drowsiness or a dry mouth in the first few days of a new medication is common. New confusion, a rash, swelling, trouble breathing, or unusual bleeding is not, call the prescribing doctor. Keep an updated medication list handy for exactly this kind of question.",
+     []),
+    ("Choking response for caregivers", "Emergency", "What to do in the first moments.",
+     "Encourage coughing if the person can still cough or speak, that's usually the most effective clearing. If they cannot breathe, speak, or cough, call 911 and begin abdominal thrusts if you are trained to. Never leave the person alone while this is happening, send someone else to call.",
+     []),
+
+    # ---- Safety ----
+    ("Home fire safety and evacuation planning", "Safety", "Planning ahead matters most for clients with limited mobility.",
+     "Test smoke detectors monthly and replace batteries yearly. Plan two ways out of every room and know which one works for a client using a walker or wheelchair. Keep a phone within reach at night. Practice the plan, don't just write it down.",
+     []),
+    ("Carbon monoxide detector placement", "Safety", "An invisible risk worth planning for.",
+     "Install a carbon monoxide detector on every level of the home, especially near sleeping areas. Test it monthly along with smoke detectors. Symptoms of exposure, headache, dizziness, nausea, can be mistaken for illness, so a working detector matters more than instinct here.",
+     []),
+    ("Winter safety for seniors at home", "Safety", "Reducing cold weather risks.",
+     "Keep indoor temperatures at 68 degrees or warmer; older bodies regulate temperature less efficiently. Salt or sand icy walkways before they're needed, not after a fall. Check that heating equipment is inspected and working before the season starts.",
+     []),
+    ("Heat safety in summer for older adults", "Safety", "Older adults are more vulnerable to heat related illness.",
+     "Encourage fluids throughout hot days, don't wait for thirst. Keep the home cool, or plan visits to an air conditioned space during heat waves. Watch for heavy sweating, weakness, or confusion, signs of heat exhaustion that need immediate cooling and fluids.",
+     []),
+    ("Bed rail safety", "Safety", "A tool that helps some clients and creates risk for others.",
+     "Bed rails can prevent rolling out of bed, but a confused client may try to climb over them, which is more dangerous than no rail at all. Check the fit, gaps large enough to trap a limb are a hazard. When in doubt, ask the care team whether rails are appropriate for this client.",
+     []),
+    ("Wheelchair safety checks", "Safety", "A quick routine that prevents accidents.",
+     "Check that brakes hold firmly before every transfer. Look at tire pressure and tread if the chair is not power assisted. Make sure footrests are positioned correctly, not dragging or catching on the floor. Report any unusual sounds or resistance right away.",
+     []),
+    ("Safe transfer techniques using a gait belt", "Safety", "Protecting both the client and the caregiver during a transfer.",
+     "Apply the gait belt snugly around the waist, over clothing, never bare skin. Bend your knees, not your back, and keep the client close to your body during the move. Count together out loud before moving, so the transfer is coordinated, not sudden.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Preventing wandering in dementia clients", "Safety", "Reducing the risk of a client leaving unsupervised.",
+     "Door alarms or chimes alert caregivers when an exterior door opens. Keep a recent photo on hand in case a report to authorities is ever needed. Identify wandering triggers, often restlessness in the late afternoon, and redirect with an activity before it escalates.",
+     []),
+
+    # ---- Emergency ----
+    ("Signs of a heart attack", "Emergency", "Recognizing symptoms that need 911, not a wait and see approach.",
+     "Chest pain or pressure, pain spreading to the arm, jaw, or back, shortness of breath, cold sweat, or nausea. Symptoms in women can be subtler, fatigue or discomfort rather than classic chest pain. Call 911 immediately rather than driving to the hospital yourself.",
+     []),
+    ("Signs of a diabetic emergency", "Emergency", "Telling low and high blood sugar apart in a hurry.",
+     "Low blood sugar comes on fast: shakiness, confusion, sweating, sometimes fainting, give a fast acting sugar source immediately if the person is conscious and able to swallow. High blood sugar builds more slowly: extreme thirst, frequent urination, fruity smelling breath. Either extreme, if severe or the person is unresponsive, needs 911.",
+     []),
+    ("What to do during a power outage with medical equipment", "Emergency", "Keeping equipment running when the power goes out.",
+     "Know how long your backup battery lasts for any oxygen concentrator, ventilator, or other powered equipment, and have a manual backup plan. Register vulnerable clients with the utility company's medical priority program if one exists in your area. Have a plan for where to go if the outage extends past the equipment's battery life.",
+     []),
+    ("Fall response, when to call 911 versus assess first", "Emergency", "Not every fall needs an ambulance, but some do.",
+     "Call 911 immediately for a head injury, visible deformity, inability to move a limb, or loss of consciousness. For a fall without those signs, help the person stay still, check for pain, and assist them up slowly only if they feel able. When in doubt, it's always safer to call.",
+     []),
+    ("Recognizing anaphylaxis (severe allergic reaction)", "Emergency", "A fast moving emergency that needs immediate action.",
+     "Swelling of the face, lips, or throat, difficulty breathing, hives, or a sudden drop in alertness after a new food, medication, or insect sting. Use an epinephrine auto-injector immediately if one is prescribed and available, then call 911, even if symptoms seem to improve after the injection.",
+     []),
+
+    # ---- Family Support ----
+    ("Talking to a loved one about needing more help", "Family Support", "Starting a hard conversation with care.",
+     "Choose a calm moment, not right after a crisis. Focus on specific, recent examples rather than generalizations. Ask what they're worried about, and listen before proposing solutions. Frame extra help as protecting their independence longer, not taking it away.",
+     ["client", "family"]),
+    ("Grief support resources", "Family Support", "You don't have to navigate loss alone.",
+     "Grief has no fixed timeline or correct way to feel it. Local hospice organizations often offer free grief counseling even if hospice wasn't previously involved. Support groups, in person or online, connect you with others who understand. Ask your care team for a referral if you'd like one.",
+     ["client", "family"]),
+    ("Understanding respite care", "Family Support", "Short term relief for family caregivers.",
+     "Respite care provides temporary coverage, a few hours, a day, or even a longer stay, so a family caregiver can rest, travel, or handle other responsibilities. It is not a sign of giving up, it's a tool that helps caregiving stay sustainable. Ask CareLink about arranging a respite stay.",
+     ["client", "family"]),
+    ("Sundowning, understanding evening confusion", "Family Support", "Why symptoms often worsen late in the day.",
+     "Many people with dementia become more confused, anxious, or agitated in the late afternoon and evening, a pattern called sundowning. Keeping evenings calm, well lit, and predictable can help. Avoid scheduling demanding tasks or unfamiliar visitors during this window if possible.",
+     []),
+    ("Non-verbal pain cues in clients with dementia", "Family Support", "Recognizing pain when someone can't describe it.",
+     "Grimacing, guarding a body part, restlessness, or a sudden change in behavior can all signal pain in someone who can't clearly say so. A usually calm client becoming agitated is worth investigating, not just managing. Report any noticeable behavior change to the care team.",
+     []),
+    ("Supporting a client through hospital discharge", "Family Support", "The transition home is a high risk time.",
+     "Confirm the full discharge paperwork, including new medications and any that were stopped, before leaving the hospital. Schedule the follow up appointment before you leave if possible. Watch closely for the first 72 hours at home, many complications show up in that window.",
+     ["client", "family"]),
+    ("Financial assistance programs for home care", "Family Support", "An overview of where to start looking.",
+     "Options vary by region and situation: veterans benefits, long term care insurance, Medicaid waiver programs, and local Area Agency on Aging grants are common starting points. A hospital social worker or your CareLink customer service contact can often point you toward what applies to your situation.",
+     ["client", "family"]),
+
+    # ---- Wellness ----
+    ("Gentle chair exercises for seniors", "Wellness", "Movement that works for limited mobility.",
+     "Seated marches, ankle circles, and arm raises can be done safely from a sturdy chair. Aim for a few minutes, several times a day, rather than one long session. Stop any movement that causes pain, and check with a doctor before starting a new routine after a recent illness or surgery.",
+     ["client", "family"]),
+    ("Staying socially connected as a caregiver", "Wellness", "Isolation creeps in quietly, notice it early.",
+     "Caregiving can crowd out the relationships that keep you steady. Schedule even short, regular check-ins with a friend, they don't need to be long to matter. Caregiver support groups, in person or online, connect you with people who understand the specific weight of this role.",
+     ["client", "family"]),
+    ("Sleep hygiene tips for older adults", "Wellness", "Better rest starts earlier in the day.",
+     "Keep a consistent wake time, even on hard nights. Get natural light exposure earlier in the day to support the body's clock. Limit caffeine after noon and naps to under 30 minutes. A cool, dark, quiet room supports deeper sleep.",
+     []),
+    ("Managing caregiver stress day to day", "Wellness", "Small habits that add up over a long stretch.",
+     "Notice your own warning signs early: irritability, exhaustion, skipped meals. Protect small pockets of time for yourself without guilt, even 10 minutes counts. Ask for and accept help when it's offered rather than waiting until you're overwhelmed. See Caregiver burnout warning signs above for when to seek more support.",
+     ["client", "family"]),
+    ("Building a simple daily routine for dementia clients", "Wellness", "Predictability reduces anxiety.",
+     "Keep wake, meal, and bed times consistent day to day. Introduce one activity at a time rather than a long list of options, which can overwhelm. Familiar music, photos, or a favorite chair can anchor a routine and make transitions between activities easier.",
+     []),
+    ("Staying hydrated, a simple daily habit", "Wellness", "A small habit with an outsized effect on wellbeing.",
+     "Keep a filled water cup within easy reach throughout the day rather than relying on remembering to get up for one. Herbal tea, broth, and water rich fruits all count toward daily fluid intake. Mild dehydration alone can cause confusion, fatigue, and headaches that are easy to mistake for something else.",
+     []),
+
+    # ---- Company Policy (staff facing) ----
+    ("Staff punctuality and clock-in policy explained", "Company Policy", "How the clock-in window and location check work.",
+     "You can clock in starting 15 minutes before a shift's scheduled start, checked against your phone's location and the client's saved address. Clocking in from farther than 100 meters requires a typed reason, which is logged and sent to your manager, it is not blocked outright. Clock out only opens in the final 7 minutes before the shift ends, with no exceptions.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Staff dress code and identification", "Company Policy", "What to wear and carry on a visit.",
+     "Wear your CareLink identification badge visibly on every visit, clients and families are encouraged to ask to see it. Closed toe shoes are required for safety during transfers and lifts. Follow your program's specific uniform or scrub color guidance if one applies.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Staff mileage reimbursement policy", "Company Policy", "How travel between visits is compensated.",
+     "Mileage between scheduled visits is reimbursable at the current standard rate; commuting from home to your first visit of the day is not. Log mileage the same day it's driven, not retroactively at the end of the pay period. Submit through the mileage form linked from your dashboard.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Reporting an incident, what staff need to document", "Company Policy", "Getting the details right the first time.",
+     "Document what happened, when, who was present, and any immediate action taken, as soon as possible after the incident while details are fresh. Stick to observed facts rather than assumptions about cause. Notify your manager the same day for anything beyond a minor issue, and log clinical details in Clinical documentation.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Client confidentiality and HIPAA basics for staff", "Company Policy", "Protecting client information in daily work.",
+     "Only discuss a client's health information with people directly involved in their care, never with family unless the client has authorized it. Never post about a client, even without a name, on personal social media. Keep any paper notes secured and shred them once transferred to the system.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Bloodborne pathogens, universal precautions", "Company Policy", "Standard precautions for every visit, every client.",
+     "Treat all blood and certain body fluids as potentially infectious, regardless of what you know about a client's health history. Wear gloves for any contact with blood, open wounds, or bodily fluids. Wash hands thoroughly before and after every visit, even when gloves were worn throughout.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Safe lifting technique for caregivers", "Company Policy", "Protecting your own back while assisting a client.",
+     "Bend at the knees and hips, not the waist, keeping your back straight. Keep the client's weight as close to your body as possible during a lift or transfer. Never twist while lifting, move your feet instead. If a lift feels unsafe alone, it's always appropriate to ask for a two person assist.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Staff professional boundaries policy", "Company Policy", "Keeping the caregiver relationship appropriate and sustainable.",
+     "Do not accept gifts of significant value, loans, or inheritance offers from clients or their families. Keep personal social media and phone number exchanges with clients within your organization's guidance. Report any relationship that starts to feel like it's crossing a line to your manager, before it becomes a bigger problem.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Client's right to refuse care", "Client Rights", "Every client can decline a service, even one that's scheduled.",
+     "A client with decision making capacity can refuse any part of their care at any time, even mid-visit. Document the refusal and the reason given, if any, and notify customer service, don't argue or pressure. A pattern of repeated refusals is worth discussing with the care team, a single refusal is simply the client's right.",
+     ["admin", "manager", "customer_service", "field_staff"]),
+    ("Culturally responsive care basics", "Client Rights", "Respecting differences in how families approach care.",
+     "Ask rather than assume about dietary practices, modesty preferences, and family decision making roles, they vary widely even within the same background. Use a professional interpreter for medical conversations rather than a family member when language support is needed. Small, genuine questions about what matters to a client go a long way.",
+     []),
+
+    # ---- Documentation & Rights ----
+    ("Advance directives and DNR orders, the basics", "Client Rights", "Understanding a client's documented care wishes.",
+     "An advance directive states a person's wishes for care if they can't speak for themselves. A DNR (do not resuscitate) order specifically addresses CPR. These documents should be easy to find in an emergency, ask the care team where a client's are kept, and always follow them.",
+     []),
+    ("Power of attorney, what it means for care decisions", "Client Rights", "Understanding who can make decisions and when.",
+     "A power of attorney for health care lets a named person make medical decisions if the client becomes unable to. It typically only takes effect under specific conditions defined in the document, it doesn't override a client's own wishes while they're still able to express them. When in doubt about who has authority, ask customer service to check the file.",
+     ["client", "family"]),
+    ("Elder financial abuse, warning signs", "Client Rights", "Recognizing exploitation early.",
+     "Watch for sudden changes to a will or financial accounts, unfamiliar new 'friends' with access to finances, missing valuables, or a client seeming afraid of a specific person. Isolation from other family members is a common warning sign too. If you suspect abuse, report it, most regions have an elder abuse hotline or adult protective services line.",
+     []),
+    ("Client dignity and privacy during personal care", "Client Rights", "Small habits that preserve dignity in intimate moments.",
+     "Knock and announce yourself before entering, even in the client's own bedroom or bathroom. Keep the client covered as much as possible during bathing or dressing, exposing only what's necessary at each step. Narrate what you're about to do before doing it, surprise is its own kind of indignity.",
+     []),
+
     # These last two exist specifically to demonstrate audience targeting:
     # the first is staff only and should never show up for a client, family
     # member, or hospital partner, on the Resources page or from the AI

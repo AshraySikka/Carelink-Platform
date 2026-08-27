@@ -1,4 +1,4 @@
-"""Integration configuration models: Procura field mapping and Outlook intake rules."""
+"""Integration configuration models: Procura field mapping, Outlook intake rules, and AI resource embeddings."""
 from django.db import models
 
 
@@ -35,3 +35,23 @@ class OutlookIntakeRule(models.Model):
     set_urgency = models.CharField(max_length=20, default="normal")
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ResourceChunk(models.Model):
+    """
+    One embedded piece of a care Resource, used for semantic search by the
+    AI agent's search_resources tool (see embeddings.py and tools.py).
+
+    Kept in this app rather than care/models.py because it belongs to the
+    AI layer, not the resource library itself, rebuilding it (a content
+    edit, a different embedding model down the road) shouldn't need a
+    migration in the care app. Rebuilt automatically on every Resource
+    save through the signal in signals.py.
+    """
+    resource = models.ForeignKey("care.Resource", on_delete=models.CASCADE, related_name="chunks")
+    text = models.TextField()
+    embedding = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.resource.title} chunk #{self.id}"

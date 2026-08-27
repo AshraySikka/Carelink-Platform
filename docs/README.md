@@ -16,7 +16,7 @@ vendor lock in.
 | Database  | PostgreSQL                                | Neon      |
 | Frontend  | React 18, Vite, plain CSS                 | Vercel    |
 | Realtime  | WebSockets (Django Channels)              | Render    |
-| AI        | Google Gemini with retrieval (RAG)        | Optional  |
+| AI        | Google Gemini: tool-calling agent (database queries, resource search, web search) | Optional |
 | Scheduled jobs | Django management commands, run by a Render cron service | Render |
 
 ## Repository layout
@@ -50,6 +50,11 @@ python manage.py runserver
 
 The API now runs at http://localhost:8000. Leaving DATABASE_URL empty in .env
 uses a local SQLite file, which is perfect for a first run.
+
+If `GEMINI_API_KEY` is set before you run `seed_demo`, the 65 seeded
+resources get embedded automatically as they're created, so the AI agent's
+resource search works right away. If you add the key later, run
+`python manage.py backfill_resource_embeddings` once to catch those up.
 
 ### 2. Frontend
 
@@ -96,7 +101,8 @@ Every demo account uses the password: `CareLinkDemo!2026`
    - `DATABASE_URL`: the Neon connection string
    - `ALLOWED_HOSTS`: your Render hostname, for example `carelink-api.onrender.com`
    - `CORS_ALLOWED_ORIGINS` and `FRONTEND_URL`: your Vercel URL
-   - `GEMINI_API_KEY`: optional, switches on the AI assistant and AI search
+   - `GEMINI_API_KEY`: optional, switches on the AI assistant, AI search, and
+     resource embeddings
 4. Give the cron service its own `DATABASE_URL` and `SECRET_KEY` (same values
    as the web service).
 5. After the first deploy, open the Render Shell and run
@@ -156,12 +162,20 @@ Vercel URL and redeploy the backend once.
   only, assistant plus messaging, or assistant-then-agent depending on the
   role), and quick messages bottom left for everyone else
 - Platform wide notifications with a per category settings panel per user
-- AI assistant and role scoped AI search, both retrieval augmented over the
-  resource library and the caller's own data slice, powered by Gemini
+- AI assistant and role scoped AI search: a Gemini tool-calling agent, not
+  a single prompt. Per question, it can call permission checked database
+  functions (flagged referrals, shift schedules, pending approvals,
+  emergencies), semantically search the resource library, and search the
+  web through Gemini's own Google Search grounding, calling several in
+  sequence if one question needs more than one source. The chat bubble also
+  sends its own running conversation back with each question, so follow ups
+  have context
 - Emergency requests from clients and staff with a customer service triage
   board
 - Family read only access linked by email
-- Resource library and role targeted news posts
+- Resource library (65 seeded articles spanning chronic conditions, safety,
+  emergencies, family support, wellness, staff policy, and client rights,
+  each embedded for semantic search) and role targeted news posts
 - Reports: shift change requests (full log and per staff), shifts per staff,
   clock-in location overrides, referrals, emergencies, and messages sent per
   user, each filterable and exportable to Excel
@@ -179,8 +193,9 @@ See `docs/USER_GUIDE.md` for the plain language version of all of this.
 - Sessions use short lived JWTs (12 hour access token, 14 day refresh
   token), including for the WebSocket connection.
 - Every API endpoint checks the caller's role before returning data; the
-  same rules are enforced again in the AI retrieval layer, so an AI answer
-  never includes data the asking role couldn't otherwise see.
+  same rules are enforced again inside every AI tool function, so an AI
+  answer never includes data the asking role couldn't otherwise see, even
+  when the AI is the one deciding to look something up.
 - CORS is restricted to the configured frontend origin only.
 - File uploads are capped at 10MB and served from the backend, not a public
   bucket.
@@ -198,9 +213,15 @@ See `docs/USER_GUIDE.md` for the plain language version of all of this.
   `accounts/views.py` where the comment marks the spot.
 - Uploaded files are stored on the Render disk. For durable storage move
   uploads to S3 or Cloudflare R2 with django-storages.
-- The AI retrieval is keyword based to stay dependency free. Swapping in
-  pgvector on Neon turns it into full vector search without changing the
-  endpoints.
+- The AI layer is a tool-calling agent: Gemini decides which of the
+  database query functions, the resource search tool, or web search a
+  question needs, and the backend runs whichever it asks for. Resource
+  embeddings are stored as plain JSON vectors and compared in Python
+  (`integrations/embeddings.py`), which stays dependency free and works
+  identically on SQLite locally and Postgres in production. If the resource
+  library grows into the thousands of chunks, swapping the JSON column for
+  the pgvector extension on Neon (with an index) is the scale-up path, only
+  `semantic_search()` in that file would need to change.
 - Message and clinical document history is retained indefinitely, there is
   no automatic deletion or archiving job. If you need a retention policy
   (for compliance or storage reasons), that's a new scheduled command,

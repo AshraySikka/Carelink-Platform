@@ -46,6 +46,9 @@ your role:
   gets a bubble with two tabs: **Assistant** (the AI) and **Messages** (real
   conversations with real people). There's also a full page version of
   Messages in the sidebar for anyone who wants more room.
+- The assistant remembers what you've already asked it earlier in the same
+  chat window, so a follow up like "and what about tomorrow" is understood
+  in context, without repeating yourself.
 
 ---
 
@@ -162,9 +165,10 @@ In plain terms, here's what protects your information:
   be misused.
 - **Everyone only sees what their role allows**, and that's checked on the
   server every single time, not just hidden in the app's design. Even the
-  AI assistant follows this: it's only ever given the data your role could
-  already see, so two people with different roles asking the exact same
-  question can get different answers.
+  AI assistant follows this: every question it asks CareLink's own data on
+  your behalf is checked against your role exactly like any other feature,
+  so two people with different roles asking the exact same question can get
+  different answers.
 - **Everything travels encrypted.** Once deployed, all traffic (the app
   itself, the API, the live chat connection) runs over HTTPS, the same
   padlock-icon encryption your bank's website uses.
@@ -188,9 +192,13 @@ is — but these are the concrete measures actually built into it today.
   server's configuration. Without a key, those emails are printed to the
   server's own log instead of actually sent, so the platform still works
   for testing, you just copy the link manually.
-- **AI (Google Gemini)** — powers the assistant bubble and AI search.
-  Fully working once an API key is added. Without one, the AI features
-  give a polite "not connected yet" message instead of an answer.
+- **AI (Google Gemini)** — powers the assistant bubble and AI search. It can
+  look up your CareLink data directly (referrals, shifts, approvals,
+  emergencies, always filtered to what your role can see), search the
+  resource library by meaning rather than exact wording, and search the
+  web for general questions your own data and guides wouldn't cover. Fully
+  working once an API key is added. Without one, the AI features give a
+  polite "not connected yet" message instead of an answer.
 - **Outlook / Microsoft 365 email intake** — not active yet. The plan: once
   your Microsoft 365 administrator approves the right permissions, incoming
   referral emails would be automatically read, sorted using rules you set
@@ -409,21 +417,39 @@ You run the platform.
 
 ## The AI, explained simply
 
-CareLink's AI features use a technique called retrieval augmented
-generation. In plain terms: before answering, the system first gathers the
-relevant CareLink information your account can see, then asks the AI to
-answer using only that information. Three places use it:
+CareLink's AI doesn't just guess based on a pile of text handed to it. When
+you ask it something, it first decides what it actually needs to answer
+well, then goes and gets that, the same way a helpful coworker would check
+the schedule or look something up rather than answer from memory. Three
+places use it:
 
 - **The chat bubble's assistant** (or the whole bubble, for hospital
   partners and family): how-to guidance plus answers about your own data.
 - **AI search**: ask questions in plain language, like "which referrals are
-  high urgency", and get an answer grounded in your role's data.
+  high urgency" or "which clients have concerns flagged that need follow
+  up", and get an answer built from an actual, real time lookup, not a
+  guess about which rows might be relevant.
 - **The hospital partner support flow**: the same assistant, with a path to
   a live person built in once you need one.
 
-Two people with different roles asking the same question get different
-answers, because each answer is built only from what that person is allowed
-to see.
+Depending on your question, the AI can do any of the following, sometimes
+more than one for the same question:
+
+- **Check CareLink's own data.** For questions about referrals, shifts,
+  approvals, or emergencies, it runs an actual, permission checked lookup
+  against the real database, the same data you'd see on the matching page,
+  not a snapshot or a guess.
+- **Search the resource library by meaning.** Rather than only matching the
+  exact words you typed, it understands what you're asking about and finds
+  the care guide that actually covers it, even if the wording is different.
+- **Search the web.** For general questions that aren't about your specific
+  CareLink data or the resource library, like a general medical question,
+  it can look the answer up online.
+
+Two people with different roles asking the same question can still get
+different answers, because every database lookup is filtered to what that
+person's role is allowed to see, exactly the same rule every other part of
+CareLink follows.
 
 ---
 

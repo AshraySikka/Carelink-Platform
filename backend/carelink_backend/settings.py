@@ -119,6 +119,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # AI assistant configuration. The key is optional so the demo runs without it.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# Used by integrations/embeddings.py for the resource library semantic search.
+GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 
 # Outlook intake placeholders. See integrations/outlook.py for the plan.
 MS_GRAPH_TENANT_ID = os.getenv("MS_GRAPH_TENANT_ID", "")

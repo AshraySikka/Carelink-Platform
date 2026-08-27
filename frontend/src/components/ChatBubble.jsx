@@ -27,7 +27,7 @@ import { useToast } from "../toast.jsx";
 // someone sees the assistant do is genuinely useful.
 const STARTER_PROMPTS = {
   customer_service: ["Which referrals are high urgency right now?", "Which clients have concerns flagged that need follow up?"],
-  admin: ["How many referrals are still unassigned?", "What does our incident escalation policy say?"],
+  admin: ["What can you do for me?", "What does our incident escalation policy say?"],
   manager: ["What change requests are waiting on my approval?", "How many of my team's shifts are today?"],
   field_staff: ["When is my next shift, and where?", "What should I do if a client refuses medication?"],
   client: ["When is my next visit, and who's coming?", "What can I do to prevent falls at home?"],

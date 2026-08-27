@@ -1,13 +1,15 @@
-// The floating AI assistant, bottom right. Asks the RAG backed endpoint and
-// keeps a short local conversation.
+// The floating AI assistant, bottom right. Asks the agent backed endpoint,
+// which can call database tools, search the resource library, and search
+// the web, and keeps a short local conversation that it also sends back
+// with each question so follow ups like "what about tomorrow" still work.
 import { useState } from "react";
 import { api } from "../api";
 
+const GREETING = { mine: false, body: "Hi, I am the CareLink assistant. Ask me how to do anything here, for example: how do I clock in, or where do I add a family member." };
+
 export default function AiChatBubble() {
   const [open, setOpen] = useState(false);
-  const [history, setHistory] = useState([
-    { mine: false, body: "Hi, I am the CareLink assistant. Ask me how to do anything here, for example: how do I clock in, or where do I add a family member." },
-  ]);
+  const [history, setHistory] = useState([GREETING]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -15,10 +17,14 @@ export default function AiChatBubble() {
     const question = text.trim();
     if (!question || busy) return;
     setText("");
+    const priorTurns = history;
     setHistory((h) => [...h, { mine: true, body: question }]);
     setBusy(true);
     try {
-      const data = await api("/integrations/ai/chat/", { method: "POST", body: { question } });
+      const data = await api("/integrations/ai/chat/", {
+        method: "POST",
+        body: { question, history: priorTurns },
+      });
       setHistory((h) => [...h, { mine: false, body: data.answer }]);
     } catch (error) {
       setHistory((h) => [...h, { mine: false, body: error.message }]);

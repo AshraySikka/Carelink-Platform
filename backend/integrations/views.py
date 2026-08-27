@@ -9,16 +9,20 @@ from .models import OutlookIntakeRule, ProcuraFieldMapping
 
 @api_view(["POST"])
 def ai_chat_view(request):
-    """The floating assistant bubble. Grounded in the guide and role scoped data."""
+    """The floating assistant bubble. Grounded in the guide, live data, resources, and the web."""
     question = (request.data.get("question") or "").strip()
     if not question:
         return Response({"detail": "Ask a question first."}, status=400)
-    return Response({"answer": rag.assistant_answer(request.user, question)})
+    # Optional: the bubble's own running conversation, [{mine, body}, ...],
+    # so a follow up question like "and what about tomorrow" still makes
+    # sense. Missing or malformed history just means no memory, not an error.
+    history = request.data.get("history") or []
+    return Response({"answer": rag.assistant_answer(request.user, question, history=history)})
 
 
 @api_view(["POST"])
 def ai_search_view(request):
-    """Role scoped AI search over the platform's data."""
+    """Role scoped AI search over the platform's data, resources, and the web."""
     question = (request.data.get("question") or "").strip()
     if not question:
         return Response({"detail": "Ask a question first."}, status=400)
