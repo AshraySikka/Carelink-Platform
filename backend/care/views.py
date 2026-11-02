@@ -5,29 +5,46 @@ version enforced in the database.
 """
 import math
 
+from accounts.models import Roles, User
+from accounts.permissions import IsAdmin, IsAdminOrCS, IsSchedulingStaff
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.utils import timezone
+from messaging.models import Conversation, ConversationParticipant, Message
+from notifications.utils import notify, notify_role
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from accounts.models import Roles, User
-from accounts.permissions import IsAdmin, IsAdminOrCS, IsSchedulingStaff
-from notifications.utils import notify, notify_role
 from .models import (
-    BLOCKED_REASON_CODES, ChangeReasonCode, ChangeRequestStatus, ChangeRequestType,
-    ClinicalDocument, EmergencyRequest, FamilyMember, NewsPost, PlatformSetting,
-    Program, Referral, ReferralDocument, ReferralStatus, Resource, Shift,
-    ShiftChangeRequest, ShiftStatus,
+    BLOCKED_REASON_CODES,
+    ChangeReasonCode,
+    ChangeRequestStatus,
+    ChangeRequestType,
+    ClinicalDocument,
+    EmergencyRequest,
+    FamilyMember,
+    NewsPost,
+    PlatformSetting,
+    Program,
+    Referral,
+    ReferralDocument,
+    ReferralStatus,
+    Resource,
+    Shift,
+    ShiftChangeRequest,
+    ShiftStatus,
 )
 from .serializers import (
-    ClinicalDocumentSerializer, EmergencySerializer, FamilyMemberSerializer,
-    NewsPostSerializer, ProgramSerializer, ReferralSerializer, ResourceSerializer,
-    ShiftChangeRequestSerializer, ShiftSerializer,
+    ClinicalDocumentSerializer,
+    EmergencySerializer,
+    FamilyMemberSerializer,
+    NewsPostSerializer,
+    ProgramSerializer,
+    ReferralSerializer,
+    ResourceSerializer,
+    ShiftChangeRequestSerializer,
+    ShiftSerializer,
 )
-
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
-
-from messaging.models import Conversation, ConversationParticipant, Message
 
 # ---------------- Programs ----------------
 

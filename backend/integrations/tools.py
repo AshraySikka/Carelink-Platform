@@ -12,11 +12,17 @@ Gemini decides which of these to call, and with what arguments, based on
 the "description" text below, that text is doing real work, it is the
 only thing telling the model when a tool applies.
 """
+from accounts.models import Roles
+from care.models import (
+    EmergencyRequest,
+    Referral,
+    ReferralStatus,
+    Shift,
+    ShiftChangeRequest,
+    Urgency,
+)
 from django.db.models import Q
 from django.utils import timezone
-
-from accounts.models import Roles
-from care.models import EmergencyRequest, Referral, ReferralStatus, Shift, ShiftChangeRequest, Urgency
 
 MAX_ROWS = 25
 STAFF_ROLES = {Roles.ADMIN, Roles.CUSTOMER_SERVICE, Roles.MANAGER}

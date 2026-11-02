@@ -18,6 +18,17 @@ SECRET_KEY = os.getenv("SECRET_KEY", "insecure-dev-key-change-me")
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 
+# Render injects the service hostname automatically. Trusting it here means a
+# missing or mistyped ALLOWED_HOSTS value can not lock the deployed API out.
+_render_host = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if _render_host:
+    if _render_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_render_host)
+    CSRF_TRUSTED_ORIGINS = [f"https://{_render_host}"]
+    # Render terminates HTTPS at its proxy. Without this header setting Django
+    # thinks every request is plain http and the /admin login fails its CSRF check.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 INSTALLED_APPS = [
     "daphne",
     "django.contrib.admin",
@@ -75,7 +86,9 @@ ASGI_APPLICATION = "carelink_backend.asgi.application"
 # Database. Neon Postgres in production via DATABASE_URL, SQLite fallback for local dev.
 _db_url = os.getenv("DATABASE_URL", "").strip()
 if _db_url:
-    DATABASES = {"default": dj_database_url.parse(_db_url, conn_max_age=600, ssl_require=True)}
+    # conn_health_checks drops a stale connection and reconnects, which matters
+    # because Neon suspends idle databases and kills their open connections.
+    DATABASES = {"default": dj_database_url.parse(_db_url, conn_max_age=600, conn_health_checks=True, ssl_require=True)}
 else:
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 

@@ -4,9 +4,11 @@ services:
   - type: web
     name: carelink-api
     runtime: python
+    plan: free   # Without this line Render defaults to a paid instance.
     rootDir: backend
     buildCommand: "./build.sh"
     startCommand: "daphne -b 0.0.0.0 -p $PORT carelink_backend.asgi:application"
+    healthCheckPath: /health/
     envVars:
       - key: SECRET_KEY
         generateValue: true
@@ -25,20 +27,27 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.4"
 
+  # DISABLED for the free deployment. As far as I know Render cron jobs have no
+  # free tier, so leaving this block active can add a paid service to the
+  # blueprint. To turn the shift change escalation job back on, uncomment it
+  # and give it a paid plan. Until then, unanswered change requests are not
+  # re-notified automatically.
+  #
   # Runs every 15 minutes and notifies the manager, customer service, and
   # admins again for any shift change request that's still pending as the
   # shift gets close, so an unanswered request never just sits there
-  # unnoticed. Double check this block against Render's current cron job
-  # blueprint syntax before deploying.
-  - type: cron
-    name: carelink-escalate-changes
-    runtime: python
-    rootDir: backend
-    buildCommand: "pip install -r requirements.txt"
-    schedule: "*/15 * * * *"
-    startCommand: "python manage.py escalate_change_requests"
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: SECRET_KEY
-        sync: false
+  # unnoticed.
+  #
+  # - type: cron
+  #   name: carelink-escalate-changes
+  #   runtime: python
+  #   plan: starter
+  #   rootDir: backend
+  #   buildCommand: "pip install -r requirements.txt"
+  #   schedule: "*/15 * * * *"
+  #   startCommand: "python manage.py escalate_change_requests"
+  #   envVars:
+  #     - key: DATABASE_URL
+  #       sync: false
+  #     - key: SECRET_KEY
+  #       sync: false
